@@ -9,7 +9,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.example.blehr.ble.HeartRateClient
+import com.example.blehr.data.ActivityTracker
 import com.example.blehr.data.Repo
+import com.example.blehr.data.UsageRepo
 import com.example.blehr.ui.HuixueApp
 
 class MainActivity : ComponentActivity() {
@@ -33,9 +35,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val activityLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) ActivityTracker.start(this)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Repo.init(this)
+
+        // 计步器不需要用户主动触发，进 App 就开始观察；没有权限时内部自动标记不可用
+        ActivityTracker.start(this)
 
         client = HeartRateClient(this).also { c ->
             c.onStatus = { hrStatus = it }
@@ -62,6 +73,10 @@ class MainActivity : ComponentActivity() {
                     heartRate = null
                     restingHr = null
                     hrSamples.clear()
+                },
+                onRequestActivity = {
+                    if (ActivityTracker.hasPermission(this)) ActivityTracker.start(this)
+                    else activityLauncher.launch(ActivityTracker.PERMISSION)
                 }
             )
         }
@@ -72,8 +87,15 @@ class MainActivity : ComponentActivity() {
         else permissionLauncher.launch(HeartRateClient.requiredPermissions())
     }
 
+    override fun onResume() {
+        super.onResume()
+        // 从系统设置授权回来时，立刻刷新一次使用统计
+        UsageRepo.refresh(this)
+    }
+
     override fun onDestroy() {
         client.close()
+        ActivityTracker.stop()
         super.onDestroy()
     }
 }

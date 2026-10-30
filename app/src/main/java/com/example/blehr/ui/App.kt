@@ -51,7 +51,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.blehr.data.ActivitySnapshot
+import com.example.blehr.data.ActivityTracker
 import com.example.blehr.data.Repo
+import com.example.blehr.data.ScreenUsage
+import com.example.blehr.data.UsageRepo
 import com.example.blehr.logic.Recommender
 import com.example.blehr.logic.StateEngine
 import com.example.blehr.model.ActionCategory
@@ -90,21 +94,42 @@ fun HuixueApp(
     devices: List<BluetoothDevice>,
     onConnect: () -> Unit,
     onPickDevice: (BluetoothDevice) -> Unit,
-    onDisconnect: () -> Unit
+    onDisconnect: () -> Unit,
+    onRequestActivity: () -> Unit
 ) {
     var screen by remember { mutableStateOf<Screen>(Screen.Home) }
 
-    // 演示/输入用的状态信号（生成环境应来自 Health Connect + 前台计时）
-    var focusMinutes by remember { mutableStateOf(95) }
-    var screenMinutes by remember { mutableStateOf(25) }
+    val ctx = LocalContext.current
+    val usage = UsageRepo.snapshot
+    val activity = ActivityTracker.snapshot
+
+    // 手输值：没授权时用它；答辩想直接演到"低电量"也可以手动切
+    var manualFocus by remember { mutableStateOf(95) }
+    var manualScreen by remember { mutableStateOf(25) }
+    var forceDemo by remember { mutableStateOf(false) }
     var hour by remember { mutableStateOf(LocalTime.now().hour) }
+
+    // 有真实信号就用真实的，否则退回手输，并在 UI 上标明来源
+    val usingReal = usage.available && !forceDemo
+    val focusMinutes = if (usingReal) usage.sessionMinutes else manualFocus
+    val screenMinutes = if (usingReal) usage.foregroundMinutesLastHour else manualScreen
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            UsageRepo.refresh(ctx)
+            ActivityTracker.refresh()
+            hour = LocalTime.now().hour
+            delay(30_000L)
+        }
+    }
 
     val snapshot = SensorSnapshot(
         heartRate = heartRate,
         restingHr = restingHr,
         focusMinutes = focusMinutes,
         screenMinutesLastHour = screenMinutes,
-        hourOfDay = hour
+        hourOfDay = hour,
+        sedentaryMinutes = activity.stillMinutes
     )
     val assessment = StateEngine.assess(snapshot)
     val accent = when (assessment.band) {
@@ -141,11 +166,19 @@ fun HuixueApp(
                     onPickDevice = onPickDevice,
                     onDisconnect = onDisconnect,
                     focusMinutes = focusMinutes,
-                    onFocusChange = { focusMinutes = it },
+                    onFocusChange = { manualFocus = it; forceDemo = true },
                     screenMinutes = screenMinutes,
-                    onScreenMinutesChange = { screenMinutes = it },
+                    onScreenMinutesChange = { manualScreen = it; forceDemo = true },
                     hour = hour,
                     onHourChange = { hour = it },
+                    usingReal = usingReal,
+                    usageAvailable = usage.available,
+                    demoFocus = manualFocus,
+                    demoScreen = manualScreen,
+                    onOpenUsageSettings = { ctx.startActivity(ScreenUsage.settingsIntent()) },
+                    activity = activity,
+                    onRequestActivity = onRequestActivity,
+                    onToggleDemo = { forceDemo = !forceDemo },
                     onNeedBreak = { screen = Screen.Recommend },
                     onOpenGraph = { screen = Screen.Graph },
                     onOpenPool = { screen = Screen.Pool }
@@ -257,12 +290,19 @@ private fun HomeScreen(
     onScreenMinutesChange: (Int) -> Unit,
     hour: Int,
     onHourChange: (Int) -> Unit,
+    usingReal: Boolean,
+    usageAvailable: Boolean,
+    demoFocus: Int,
+    demoScreen: Int,
+    onOpenUsageSettings: () -> Unit,
+    activity: ActivitySnapshot,
+    onRequestActivity: () -> Unit,
+    onToggleDemo: () -> Unit,
     onNeedBreak: () -> Unit,
     onOpenGraph: () -> Unit,
     onOpenPool: () -> Unit
 ) {
     var showReasons by remember { mutableStateOf(false) }
-    var showDemo by remember { mutableStateOf(false) }
 
     Column(
         Modifier
@@ -378,24 +418,109 @@ private fun HomeScreen(
 
         Spacer(Modifier.height(16.dp))
 
-        // ---- 演示数据（答辩时可直接调参）----
-        Text(
-            if (showDemo) "收起演示数据 ▲" else "演示数据（答辩时可调）▼",
-            fontSize = 13.sp, color = TextDim,
-            modifier = Modifier.clickable { showDemo = !showDemo }
-        )
-        if (showDemo) {
+        // ---- 信号来源（真实数据优先，可切演示）----
+        SectionCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("信号来源", fontSize = 13.sp, color = TextDim)
+                Spacer(Modifier.weight(1f))
+                Chip(if (usingReal) "真实数据" else "演示数据", if (usingReal) Mint else Amber)
+            }
             Spacer(Modifier.height(10.dp))
-            SectionCard {
-                Text("已连续专注 ${focusMinutes} 分钟", fontSize = 13.sp, color = TextMain)
+
+            when {
+                usingReal -> {
+                    Text(
+                        "手机使用情况：已授权",
+                        fontSize = 13.sp, color = TextMain
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "连续使用 $focusMinutes 分钟 · 近 1 小时前台 $screenMinutes 分钟",
+                        fontSize = 14.sp, color = TextMain, fontWeight = FontWeight.Medium
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "来自系统使用统计（本机计算，不上传）。「连续使用」= 从上次熄屏或闲置 5 分钟后到现在。",
+                        fontSize = 11.sp, color = TextDim.copy(alpha = 0.75f)
+                    )
+                }
+
+                !usageAvailable -> {
+                    Text("还没授权读取手机使用情况", fontSize = 13.sp, color = TextMain)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "现在用的是演示数据，授权后这栏会自动换成真实信号。",
+                        fontSize = 12.sp, color = TextDim
+                    )
+                    TextButton(onClick = onOpenUsageSettings) {
+                        Text("去授权（系统设置）", color = Mint)
+                    }
+                }
+
+                else -> {
+                    Text("当前使用演示数据", fontSize = 13.sp, color = TextMain)
+                }
+            }
+
+            if (usageAvailable) {
+                TextButton(onClick = onToggleDemo) {
+                    Text(
+                        if (usingReal) "改用演示数据" else "切回真实数据",
+                        color = Mint, fontSize = 13.sp
+                    )
+                }
+            }
+
+            // ---- 身体活动（计步器）----
+            Spacer(Modifier.height(8.dp))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.07f)))
+            Spacer(Modifier.height(10.dp))
+            Text("身体活动", fontSize = 13.sp, color = TextDim)
+            Spacer(Modifier.height(4.dp))
+            when {
+                !activity.available -> {
+                    Text("还没授权读取身体活动", fontSize = 13.sp, color = TextMain)
+                    Text(
+                        "授权后能判断「你多久没起身走动了」。这个信号普通手机就能给，不依赖手环。",
+                        fontSize = 11.sp, color = TextDim.copy(alpha = 0.75f)
+                    )
+                    TextButton(onClick = onRequestActivity) {
+                        Text("去授权", color = Mint)
+                    }
+                }
+
+                activity.stillMinutes == null -> {
+                    Text("拿到了计步器，但还没观察到走动", fontSize = 13.sp, color = TextMain)
+                    Text(
+                        "走几步之后，这里会开始统计你坐了多久。",
+                        fontSize = 11.sp, color = TextDim.copy(alpha = 0.75f)
+                    )
+                }
+
+                else -> {
+                    Text(
+                        "已经 ${activity.stillMinutes} 分钟没起身走动 · 打开 App 后走了 ${activity.stepsSinceOpen} 步",
+                        fontSize = 14.sp, color = TextMain, fontWeight = FontWeight.Medium
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "来自手机计步器（本机计算，不上传）。久坐超过 60 分钟会影响精力判断。",
+                        fontSize = 11.sp, color = TextDim.copy(alpha = 0.75f)
+                    )
+                }
+            }
+
+            if (!usingReal) {
+                Spacer(Modifier.height(4.dp))
+                Text("已连续使用 ${demoFocus} 分钟", fontSize = 13.sp, color = TextMain)
                 Slider(
-                    value = focusMinutes.toFloat(),
+                    value = demoFocus.toFloat(),
                     onValueChange = { onFocusChange(it.roundToInt()) },
                     valueRange = 0f..180f
                 )
-                Text("近一小时屏幕 ${screenMinutes} 分钟", fontSize = 13.sp, color = TextMain)
+                Text("近一小时屏幕 ${demoScreen} 分钟", fontSize = 13.sp, color = TextMain)
                 Slider(
-                    value = screenMinutes.toFloat(),
+                    value = demoScreen.toFloat(),
                     onValueChange = { onScreenMinutesChange(it.roundToInt()) },
                     valueRange = 0f..90f
                 )
@@ -406,7 +531,7 @@ private fun HomeScreen(
                     valueRange = 0f..23f
                 )
                 Text(
-                    "这些是演示用输入，正式版本由 Health Connect / 前台计时提供。",
+                    "演示数据仅用于答辩现场摆状态，报告中会标注哪些结论来自真实信号。",
                     fontSize = 11.sp, color = TextDim.copy(alpha = 0.75f)
                 )
             }

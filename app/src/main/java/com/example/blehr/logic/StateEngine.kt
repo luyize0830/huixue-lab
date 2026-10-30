@@ -70,6 +70,20 @@ object StateEngine {
             reasons += "近一小时屏幕时间 ${s.screenMinutesLastHour} 分钟"
         }
 
+        // ---- 5. 久坐（手机计步器：多久没有起身走动）----
+        val still = s.sedentaryMinutes
+        when {
+            still == null -> Unit // 没有计步数据就跳过，不编造
+            still >= 90 -> {
+                penalty += 12
+                reasons += "已经 $still 分钟没起身走动了"
+            }
+            still >= 60 -> {
+                penalty += 6
+                reasons += "$still 分钟没起身走动"
+            }
+        }
+
         val score = (100 - penalty).coerceIn(5, 100)
         val band = when {
             score < 40 -> EnergyBand.LOW

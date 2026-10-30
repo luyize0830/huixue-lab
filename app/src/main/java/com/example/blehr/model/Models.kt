@@ -36,7 +36,9 @@ data class SensorSnapshot(
     val restingHr: Int? = null,
     val focusMinutes: Int = 0,
     val screenMinutesLastHour: Int = 0,
-    val hourOfDay: Int = 12
+    val hourOfDay: Int = 12,
+    /** 已经多久没起身走动（分钟）；拿不到就是 null，不猜 */
+    val sedentaryMinutes: Int? = null
 )
 
 /** 状态评估结果：分数 + 人话结论 + 可展开的依据 */

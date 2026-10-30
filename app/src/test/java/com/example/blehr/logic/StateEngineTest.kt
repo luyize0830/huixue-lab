@@ -93,6 +93,42 @@ class StateEngineTest {
     }
 
     @Test
+    fun `久坐时长分两档扣分`() {
+        // 90 分钟以上扣 12，60 分钟以上扣 6
+        assertEquals(88, StateEngine.assess(SensorSnapshot(sedentaryMinutes = 90)).score)
+        assertEquals(94, StateEngine.assess(SensorSnapshot(sedentaryMinutes = 60)).score)
+        assertEquals(100, StateEngine.assess(SensorSnapshot(sedentaryMinutes = 59)).score)
+
+        val r = StateEngine.assess(SensorSnapshot(sedentaryMinutes = 95))
+        assertTrue(r.reasons.any { it.contains("95 分钟没起身走动") })
+    }
+
+    @Test
+    fun `没有计步数据时不扣分也不编造依据`() {
+        val r = StateEngine.assess(SensorSnapshot(sedentaryMinutes = null))
+        assertEquals(100, r.score)
+        assertTrue(r.reasons.none { it.contains("没起身走动") })
+    }
+
+    @Test
+    fun `五个信号全部报警时分数降到25`() {
+        val r = StateEngine.assess(
+            SensorSnapshot(
+                heartRate = 100,
+                restingHr = 65,
+                focusMinutes = 150,
+                screenMinutesLastHour = 55,
+                hourOfDay = 2,
+                sedentaryMinutes = 120
+            )
+        )
+        // 22 + 18 + 15 + 8 + 12 = 75
+        assertEquals(25, r.score)
+        assertEquals(EnergyBand.LOW, r.band)
+        assertEquals(5, r.reasons.size)
+    }
+
+    @Test
     fun `档位阈值为40与70`() {
         // 70 分及以上为 HIGH：22 + 8 = 30 扣分
         val high = StateEngine.assess(
