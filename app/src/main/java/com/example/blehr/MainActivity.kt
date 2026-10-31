@@ -1,6 +1,7 @@
 package com.example.blehr
 
 import android.bluetooth.BluetoothDevice
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -12,6 +13,8 @@ import com.example.blehr.ble.HeartRateClient
 import com.example.blehr.data.ActivityTracker
 import com.example.blehr.data.Repo
 import com.example.blehr.data.UsageRepo
+import com.example.blehr.notify.NudgeScheduler
+import com.example.blehr.notify.Reminders
 import com.example.blehr.ui.HuixueApp
 
 class MainActivity : ComponentActivity() {
@@ -41,12 +44,22 @@ class MainActivity : ComponentActivity() {
         if (granted) ActivityTracker.start(this)
     }
 
+    private val notifLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* 拒绝也不影响主流程：主动提醒只是增强 */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Repo.init(this)
+        Reminders.ensureChannel(this)
 
         // 计步器不需要用户主动触发，进 App 就开始观察；没有权限时内部自动标记不可用
         ActivityTracker.start(this)
+
+        // 通知权限：Android 13+ 才需要单独申请，拒绝也能用（只是不发主动提醒）
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !Reminders.canPost(this)) {
+            notifLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
 
         client = HeartRateClient(this).also { c ->
             c.onStatus = { hrStatus = it }

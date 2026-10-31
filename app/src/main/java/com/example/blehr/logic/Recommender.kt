@@ -1,5 +1,6 @@
 package com.example.blehr.logic
 
+import com.example.blehr.model.ActionCategory
 import com.example.blehr.model.ActionItem
 import com.example.blehr.model.ActionStat
 import com.example.blehr.model.EnergyBand
@@ -7,6 +8,26 @@ import com.example.blehr.model.ExperimentRecord
 import kotlin.math.cos
 import kotlin.math.ln
 import kotlin.math.sqrt
+
+/**
+ * 推荐时的外部约束。
+ *
+ * 为什么单独抽一个类：推荐器本来只关心"哪个行动对你有效"，但真实使用里有别的边界——
+ * 你只剩 5 分钟、现在在图书馆不能出声、现在是凌晨只适合收尾。这些约束不该写死在
+ * 采样逻辑里，否则以后每加一种场景就要改一次核心算法。
+ */
+data class RecommendationConstraints(
+    /** 用户只肯花这么多分钟；null = 不限制 */
+    val maxMinutes: Int? = null,
+    /** 深夜模式：只推"能收尾"的行动（闭眼、静下来、吃点喝点） */
+    val nightMode: Boolean = false,
+    /** 已经推过、这轮不想要的 */
+    val excludeIds: Set<String> = emptySet()
+) {
+    companion object {
+        val NIGHT_FRIENDLY = setOf(ActionCategory.REST, ActionCategory.CALM, ActionCategory.FUEL)
+    }
+}
 
 /** 一条推荐 + 它为什么被推荐（可解释性） */
 data class Recommendation(
@@ -31,11 +52,24 @@ object Recommender {
         band: EnergyBand,
         pool: List<ActionItem>,
         records: List<ExperimentRecord>,
-        limit: Int = 3
+        limit: Int = 3,
+        constraints: RecommendationConstraints = RecommendationConstraints()
     ): List<Recommendation> {
         if (pool.isEmpty()) return emptyList()
 
-        val scored = pool.map { action ->
+        val base = pool.filter { action ->
+            (constraints.maxMinutes == null || action.minutes <= constraints.maxMinutes) &&
+                action.id !in constraints.excludeIds
+        }
+        if (base.isEmpty()) return emptyList()
+
+        // 深夜：优先能"收尾"的行动；但候选不够时退回全量，不能因为规则让推荐变空
+        val eligible = if (constraints.nightMode) {
+            val night = base.filter { it.category in RecommendationConstraints.NIGHT_FRIENDLY }
+            if (night.size >= limit) night else base
+        } else base
+
+        val scored = eligible.map { action ->
             val rel = records.filter { it.actionId == action.id && it.band == band }
             val n = rel.size
             val success = rel.count { it.rating >= 4 }
@@ -51,7 +85,7 @@ object Recommender {
             val reason = when {
                 n == 0 -> "你还没在这个状态下试过它"
                 success > 0 && avg >= 4.0 -> "同样状态下你试过 $n 次，平均 ${fmt(avg)} 分"
-                success > 0 -> "试过 $n 次，有效 ${success} 次"
+                success > 0 -> "试过 $n 次，有效 $success 次"
                 n >= 2 -> "试过 $n 次，效果一般——还愿意再给它一次机会吗"
                 else -> "只试过 1 次，样本还太少"
             }

@@ -58,6 +58,9 @@ import com.example.blehr.data.ScreenUsage
 import com.example.blehr.data.UsageRepo
 import com.example.blehr.logic.Recommender
 import com.example.blehr.logic.StateEngine
+import com.example.blehr.logic.NudgePlanner
+import com.example.blehr.notify.NudgeScheduler
+import com.example.blehr.notify.Reminders
 import com.example.blehr.model.ActionCategory
 import com.example.blehr.model.ActionItem
 import com.example.blehr.model.EnergyBand
@@ -80,6 +83,7 @@ private val TextDim = Color(0xFF8B98A9)
 sealed class Screen {
     object Home : Screen()
     object Recommend : Screen()
+    object Chat : Screen()
     data class Timer(val action: ActionItem) : Screen()
     data class Feedback(val action: ActionItem, val hrBefore: Int?) : Screen()
     object Graph : Screen()
@@ -132,6 +136,21 @@ fun HuixueApp(
         sedentaryMinutes = activity.stillMinutes
     )
     val assessment = StateEngine.assess(snapshot)
+
+    // 决定"要不要主动说话"，并把文案预置好；真正的发送由系统闹钟触发的广播完成，
+    // 这样用户不打开 App 时提醒也能按纪律发出去。
+    LaunchedEffect(assessment.score, activity.stillMinutes, Repo.records.size) {
+        val top = Recommender.recommend(assessment.band, Repo.pool, Repo.records, 1).firstOrNull()
+        val nudge = NudgePlanner.plan(
+            assessment = assessment,
+            sedentaryMinutes = activity.stillMinutes,
+            topAction = top?.let { it.action.id to it.action.title },
+            lastNudgeAt = Reminders.lastNudgeAt(ctx),
+            now = System.currentTimeMillis()
+        )
+        Reminders.stash(ctx, nudge)
+        if (Reminders.isEnabled(ctx)) NudgeScheduler.start(ctx)
+    }
     val accent = when (assessment.band) {
         EnergyBand.LOW -> Rose
         EnergyBand.MID -> Amber
@@ -180,6 +199,7 @@ fun HuixueApp(
                     onRequestActivity = onRequestActivity,
                     onToggleDemo = { forceDemo = !forceDemo },
                     onNeedBreak = { screen = Screen.Recommend },
+                    onOpenChat = { screen = Screen.Chat },
                     onOpenGraph = { screen = Screen.Graph },
                     onOpenPool = { screen = Screen.Pool }
                 )
@@ -188,6 +208,15 @@ fun HuixueApp(
                     band = assessment.band,
                     pool = Repo.pool,
                     records = Repo.records,
+                    onPick = { action -> screen = Screen.Timer(action) },
+                    onBack = { screen = Screen.Home }
+                )
+
+                is Screen.Chat -> ChatScreen(
+                    band = assessment.band,
+                    pool = Repo.pool,
+                    records = Repo.records,
+                    hour = hour,
                     onPick = { action -> screen = Screen.Timer(action) },
                     onBack = { screen = Screen.Home }
                 )
@@ -299,6 +328,7 @@ private fun HomeScreen(
     onRequestActivity: () -> Unit,
     onToggleDemo: () -> Unit,
     onNeedBreak: () -> Unit,
+    onOpenChat: () -> Unit,
     onOpenGraph: () -> Unit,
     onOpenPool: () -> Unit
 ) {
@@ -382,6 +412,10 @@ private fun HomeScreen(
 
         Spacer(Modifier.height(10.dp))
 
+        TextButton(onClick = onOpenChat, modifier = Modifier.fillMaxWidth()) {
+            Text("说不清也没关系，跟它说一句 →", color = Mint, fontSize = 13.sp)
+        }
+
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TextButton(onClick = onOpenPool, modifier = Modifier.weight(1f)) {
                 Text("我的回血池", color = TextDim, fontSize = 14.sp)
@@ -389,6 +423,13 @@ private fun HomeScreen(
             TextButton(onClick = onOpenGraph, modifier = Modifier.weight(1f)) {
                 Text("回血图谱", color = TextDim, fontSize = 14.sp)
             }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // ---- 主动提醒（打扰是特权，默认开着但可一键关） ----
+        SectionCard {
+            NudgeCard(androidx.compose.ui.platform.LocalContext.current)
         }
 
         Spacer(Modifier.height(16.dp))
@@ -796,6 +837,14 @@ private fun GraphScreen(onBack: () -> Unit) {
     ) {
         BackRow("回血图谱", onBack)
         Spacer(Modifier.height(12.dp))
+
+        SectionCard {
+            Text("你的规律", fontSize = 13.sp, color = TextDim)
+            Spacer(Modifier.height(8.dp))
+            InsightsSection(Repo.records, Repo.pool)
+        }
+
+        Spacer(Modifier.height(16.dp))
 
         SectionCard {
             Row(Modifier.fillMaxWidth()) {

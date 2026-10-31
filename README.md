@@ -15,6 +15,12 @@
 | 推荐（Thompson 采样） | ✅ 已实现 | 每个"行动 × 档位"独立维护 Beta 后验，冷启动带探索加成 |
 | 行动倒计时 + 手机振动 | ✅ 已实现 | 手环振动需厂商私有协议，暂不可用 |
 | 主观反馈 + 图谱统计 | ✅ 已实现 | 1-5 分 + 前后心率差，本地存储 |
+| 回血池（26 个行动 + cue） | ✅ 已实现 | 每个行动都写了「第一步怎么做」，降低启动成本 |
+| 对话式入口（本地意图解析） | ✅ 已实现 | 一句话 → (情绪, 场景, 时间预算) → 约束推荐；非大模型，接口已留 |
+| 主动提醒（JITAI） | ✅ 已实现 | AlarmManager 30 分钟一唤，`NudgePlanner` 决定是否打扰（间隔 ≥50 分钟） |
+| 洞察（时段/榜单/心率下降率） | ✅ 已实现 | `InsightsEngine`，纯逻辑可测 |
+| 导出 CSV | ✅ 已实现 | 系统分享面板，带 BOM，标题含逗号会转义 |
+| 深夜模式 | ✅ 已实现 | 23:00–05:00 只推 REST/CALM/FUEL，候选不足退回全量 |
 | Health Connect（手环历史步数/睡眠） | ⏳ 未接入 | 依赖小米是否写入 HC，先做可靠的本机信号 |
 | 手环历史数据（睡眠/全天心率） | ⏳ 未接入 | 需 Gadgetbridge 或厂商云，见技术验证文档 |
 
@@ -59,24 +65,34 @@ app/src/main/java/com/example/blehr/
 ├── MainActivity.kt        # 入口：权限申请、BLE 客户端生命周期、静息基线维护
 ├── model/Models.kt        # 领域模型（纯 Kotlin，无 Android 依赖）
 ├── logic/StateEngine.kt   # 状态评估：可解释规则引擎
-├── logic/Recommender.kt   # 推荐：Thompson 采样 + 图谱统计
+├── logic/Recommender.kt   # 推荐：Thompson 采样 + 约束（时间/深夜/排除）+ 图谱统计
+├── logic/IntentParser.kt  # 对话入口：本地意图解析（情绪/场景/时间预算）+ 回复生成
+├── logic/InsightsEngine.kt# 时段画像、有效榜单、心率下降率、CSV 导出
+├── logic/NudgePlanner.kt  # 决定"要不要主动打扰"的纯逻辑（有单测）
+├── notify/Reminders.kt    # 通知渠道、AlarmManager 调度、广播接收器
 ├── data/Store.kt          # SharedPreferences + org.json 持久化
 ├── data/Repo.kt           # 默认行动池 + 全局状态
 ├── data/ScreenUsage.kt    # 手机使用统计取数（UsageStatsManager）
 ├── data/SessionMath.kt    # 由事件流算"连续使用/前台时长"的纯逻辑（有单测）
 ├── data/ActivityTracker.kt# 计步器 → 久坐时长（有单测）
 ├── ble/HeartRateClient.kt # BLE HRS 扫描/连接/订阅/解析
-└── ui/App.kt              # Compose UI（六个页面，手写导航）
+├── ui/App.kt              # Compose UI（七个页面，手写导航）
+├── ui/ChatScreen.kt       # 对话页
+└── ui/InsightsSection.kt  # 洞察区 + 导出 + 提醒开关
 ```
 
 ## 测试
 
-共 34 个 JVM 单元测试，`.\gradlew.bat testDebugUnitTest` 全绿：
+共 67 个 JVM 单元测试，`.\gradlew.bat testDebugUnitTest` 全绿：
 
 - `logic/StateEngineTest.kt`：12 个，各信号扣分档位、缺失降级、档位阈值、五信号全报警 = 25 分
 - `logic/RecommenderTest.kt`：8 个，空池、limit、同档位过滤、Thompson 收敛方向、探索加成、统计口径
 - `data/SessionMathTest.kt`：9 个，熄屏归零、5 分钟断线、跨小时窗口裁剪、上限截断、时间倒流
 - `data/ActivityTrackerTest.kt`：5 个，未知返回 null、8 小时封顶、负值保护
+- `logic/IntentParserTest.kt`：12 个，情绪/场景/中文数字时间预算、图书馆排除社交类、预算过小老实说没有
+- `logic/RecommenderConstraintsTest.kt`：6 个，时间上限、排除列表、深夜优先与退回、约束致空不崩、收敛方向
+- `logic/NudgePlannerTest.kt`：7 个，不该打扰的三种情况、久坐/低分模板、50 分钟冷却、关闭开关
+- `logic/InsightsEngineTest.kt`：9 个，时段划分、有效率/心率下降率、榜单排序、CSV 表头与逗号转义
 
 BLE 解析与权限路径无法用 JVM 单测覆盖，靠真机验证（见 `docs/`）。
 
@@ -94,3 +110,4 @@ BLE 解析与权限路径无法用 JVM 单测覆盖，靠真机验证（见 `doc
 - `C:\Users\34243\Desktop\软件大赛\docs\00-技术验证-手环心率.md`
 - `C:\Users\34243\Desktop\软件大赛\docs\01-选题说明.md`
 - `C:\Users\34243\Desktop\软件大赛\docs\ARCHITECTURE.md`（架构与关键决策）
+- `C:\Users\34243\Desktop\软件大赛\docs\02-功能需求清单.md`（PRD v0.3）
