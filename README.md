@@ -21,8 +21,10 @@
 | 洞察（时段/榜单/心率下降率） | ✅ 已实现 | `InsightsEngine`，纯逻辑可测 |
 | 导出 CSV | ✅ 已实现 | 系统分享面板，带 BOM，标题含逗号会转义 |
 | 深夜模式 | ✅ 已实现 | 23:00–05:00 只推 REST/CALM/FUEL，候选不足退回全量 |
-| Health Connect（手环历史步数/睡眠） | ⏳ 未接入 | 依赖小米是否写入 HC，先做可靠的本机信号 |
-| 手环历史数据（睡眠/全天心率） | ⏳ 未接入 | 需 Gadgetbridge 或厂商云，见技术验证文档 |
+| Health Connect（手环历史步数/睡眠） | ✅ 已接入 | 只读；小米没写进来时如实显示「没有数据」，不编数 |
+| 陪练码（跨设备同一场） | ✅ 已实现 | 8 位 Base36 短码，不联网、无服务端，两台设备各自本地算剩余时间，2 小时有效 |
+| 语音输入 | ✅ 已实现 | 走系统 RecognizerIntent，App 自己不申请录音权限 |
+| 手环历史数据（睡眠/全天心率） | ⏳ 未接入 | 需 Gadgetbridge 或厂商云 |
 
 ### 信号与权限矩阵（答辩会被问"数据哪来的"）
 
@@ -83,7 +85,7 @@ app/src/main/java/com/example/blehr/
 
 ## 测试
 
-共 67 个 JVM 单元测试，`.\gradlew.bat testDebugUnitTest` 全绿：
+共 76 个 JVM 单元测试，`.\gradlew.bat testDebugUnitTest` 全绿：
 
 - `logic/StateEngineTest.kt`：12 个，各信号扣分档位、缺失降级、档位阈值、五信号全报警 = 25 分
 - `logic/RecommenderTest.kt`：8 个，空池、limit、同档位过滤、Thompson 收敛方向、探索加成、统计口径

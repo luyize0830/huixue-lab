@@ -11,10 +11,23 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Health Connect：只读，不写。用户在系统弹窗里逐项授权，拒绝也不影响其他功能 -->
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP" />
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
     <uses-feature
         android:name="android.hardware.sensor.stepcounter"
         android:required="false" />
+
+    <!-- Android 11+ 包可见性：语音识别是系统/第三方服务，不声明就 resolve 不到 -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+    </queries>
 
     <application
         android:allowBackup="true"

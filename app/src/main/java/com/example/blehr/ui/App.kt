@@ -2,9 +2,12 @@ package com.example.blehr.ui
 
 import android.bluetooth.BluetoothDevice
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -41,24 +44,33 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.health.connect.client.PermissionController
 import com.example.blehr.data.ActivitySnapshot
 import com.example.blehr.data.ActivityTracker
+import com.example.blehr.data.HealthConnectSource
+import com.example.blehr.data.HealthRepo
 import com.example.blehr.data.Repo
 import com.example.blehr.data.ScreenUsage
 import com.example.blehr.data.UsageRepo
+import com.example.blehr.data.WearableSnapshot
 import com.example.blehr.logic.Recommender
+import com.example.blehr.logic.RecommendationConstraints
 import com.example.blehr.logic.StateEngine
 import com.example.blehr.logic.NudgePlanner
+import com.example.blehr.logic.Pairing
 import com.example.blehr.notify.NudgeScheduler
 import com.example.blehr.notify.Reminders
 import com.example.blehr.model.ActionCategory
@@ -67,6 +79,7 @@ import com.example.blehr.model.EnergyBand
 import com.example.blehr.model.ExperimentRecord
 import com.example.blehr.model.SensorSnapshot
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.time.LocalTime
 import kotlin.math.roundToInt
 
@@ -84,7 +97,8 @@ sealed class Screen {
     object Home : Screen()
     object Recommend : Screen()
     object Chat : Screen()
-    data class Timer(val action: ActionItem) : Screen()
+    object Join : Screen()
+    data class Timer(val action: ActionItem, val pairStartMs: Long? = null) : Screen()
     data class Feedback(val action: ActionItem, val hrBefore: Int?) : Screen()
     object Graph : Screen()
     object Pool : Screen()
@@ -103,9 +117,21 @@ fun HuixueApp(
 ) {
     var screen by remember { mutableStateOf<Screen>(Screen.Home) }
 
+    // 系统返回键：在子页面里回首页，而不是直接把 App 关掉（答辩现场最容易踩到）
+    BackHandler(enabled = screen != Screen.Home) { screen = Screen.Home }
+
     val ctx = LocalContext.current
     val usage = UsageRepo.snapshot
     val activity = ActivityTracker.snapshot
+    val wearable = HealthRepo.snapshot
+    val scope = rememberCoroutineScope()
+
+    // Health Connect 的授权弹窗由系统承载，这里只负责发起、再读一次结果
+    val healthLauncher = rememberLauncherForActivityResult(
+        PermissionController.createRequestPermissionResultContract()
+    ) {
+        scope.launch { HealthRepo.refresh(ctx) }
+    }
 
     // 手输值：没授权时用它；答辩想直接演到"低电量"也可以手动切
     var manualFocus by remember { mutableStateOf(95) }
@@ -122,6 +148,7 @@ fun HuixueApp(
         while (true) {
             UsageRepo.refresh(ctx)
             ActivityTracker.refresh()
+            HealthRepo.refresh(ctx)
             hour = LocalTime.now().hour
             delay(30_000L)
         }
@@ -200,14 +227,18 @@ fun HuixueApp(
                     onToggleDemo = { forceDemo = !forceDemo },
                     onNeedBreak = { screen = Screen.Recommend },
                     onOpenChat = { screen = Screen.Chat },
+                    onOpenJoin = { screen = Screen.Join },
                     onOpenGraph = { screen = Screen.Graph },
-                    onOpenPool = { screen = Screen.Pool }
+                    onOpenPool = { screen = Screen.Pool },
+                    wearable = wearable,
+                    onRequestHealth = { healthLauncher.launch(HealthConnectSource.permissions) }
                 )
 
                 is Screen.Recommend -> RecommendScreen(
                     band = assessment.band,
                     pool = Repo.pool,
                     records = Repo.records,
+                    hour = hour,
                     onPick = { action -> screen = Screen.Timer(action) },
                     onBack = { screen = Screen.Home }
                 )
@@ -223,11 +254,20 @@ fun HuixueApp(
 
                 is Screen.Timer -> TimerScreen(
                     action = s.action,
+                    pairStartMs = s.pairStartMs,
                     heartRate = heartRate,
                     onFinish = { before ->
                         screen = Screen.Feedback(s.action, before)
                     },
                     onCancel = { screen = Screen.Home }
+                )
+
+                is Screen.Join -> JoinScreen(
+                    pool = Repo.pool,
+                    onJoined = { action, startAt ->
+                        screen = Screen.Timer(action, startAt)
+                    },
+                    onBack = { screen = Screen.Home }
                 )
 
                 is Screen.Feedback -> FeedbackScreen(
@@ -329,8 +369,11 @@ private fun HomeScreen(
     onToggleDemo: () -> Unit,
     onNeedBreak: () -> Unit,
     onOpenChat: () -> Unit,
+    onOpenJoin: () -> Unit,
     onOpenGraph: () -> Unit,
-    onOpenPool: () -> Unit
+    onOpenPool: () -> Unit,
+    wearable: WearableSnapshot,
+    onRequestHealth: () -> Unit
 ) {
     var showReasons by remember { mutableStateOf(false) }
 
@@ -425,6 +468,11 @@ private fun HomeScreen(
             }
         }
 
+        // 陪练：一个人容易半途而废，两个人就不好意思先走
+        TextButton(onClick = onOpenJoin, modifier = Modifier.fillMaxWidth()) {
+            Text("有朋友的陪练码？从这里加入 →", color = TextDim, fontSize = 12.sp)
+        }
+
         Spacer(Modifier.height(16.dp))
 
         // ---- 主动提醒（打扰是特权，默认开着但可一键关） ----
@@ -451,6 +499,83 @@ private fun HomeScreen(
                         Text(
                             "${runCatching { d.name }.getOrNull() ?: "未命名"}  ${d.address}",
                             color = TextDim, fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // ---- 手环历史数据（Health Connect，系统级数据源）----
+        SectionCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("手环历史（可选）", fontSize = 13.sp, color = TextDim)
+                Spacer(Modifier.weight(1f))
+                Chip(
+                    when {
+                        !wearable.available -> "不可用"
+                        !wearable.authorized -> "未授权"
+                        else -> "已接入"
+                    },
+                    when {
+                        !wearable.available -> TextDim
+                        !wearable.authorized -> Amber
+                        else -> Mint
+                    }
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            when {
+                !wearable.available -> {
+                    Text(
+                        wearable.message ?: "这台手机没有 Health Connect",
+                        fontSize = 13.sp, color = TextMain
+                    )
+                    Text(
+                        "没有它也能用：手环实时心率走蓝牙，睡眠这类历史数据拿不到就不显示。",
+                        fontSize = 11.sp, color = TextDim.copy(alpha = 0.75f)
+                    )
+                }
+
+                !wearable.authorized -> {
+                    Text("还没授权读步数和睡眠", fontSize = 13.sp, color = TextMain)
+                    Text(
+                        "数据来自系统 Health Connect（小米运动健康写进去的话就能读到），只读、只在本机用。",
+                        fontSize = 11.sp, color = TextDim.copy(alpha = 0.75f)
+                    )
+                    TextButton(onClick = onRequestHealth) {
+                        Text("去授权", color = Mint)
+                    }
+                }
+
+                else -> {
+                    val steps = wearable.stepsToday
+                    val sleep = wearable.sleepMinutesLastNight
+                    if (steps == null && sleep == null) {
+                        Text(
+                            wearable.message ?: "授权了，但还读不到数据",
+                            fontSize = 13.sp, color = TextMain
+                        )
+                        Text(
+                            "常见原因：小米运动健康没有把数据写进 Health Connect。这时候我们宁可空着，也不编一个睡眠时长。",
+                            fontSize = 11.sp, color = TextDim.copy(alpha = 0.75f)
+                        )
+                    } else {
+                        if (sleep != null) {
+                            Text(
+                                "昨夜睡了 ${sleep / 60} 小时 ${sleep % 60} 分",
+                                fontSize = 14.sp, color = TextMain, fontWeight = FontWeight.Medium
+                            )
+                            Spacer(Modifier.height(4.dp))
+                        }
+                        if (steps != null) {
+                            Text("今天走了 $steps 步", fontSize = 14.sp, color = TextMain)
+                            Spacer(Modifier.height(4.dp))
+                        }
+                        Text(
+                            "来自 Health Connect，只读。睡眠时长目前只用于展示，还没有进状态模型——不想拿没验证过的信号算分。",
+                            fontSize = 11.sp, color = TextDim.copy(alpha = 0.75f)
                         )
                     }
                 }
@@ -589,12 +714,22 @@ private fun RecommendScreen(
     band: EnergyBand,
     pool: List<ActionItem>,
     records: List<ExperimentRecord>,
+    hour: Int,
     onPick: (ActionItem) -> Unit,
     onBack: () -> Unit
 ) {
     var batch by remember { mutableStateOf(0) }
-    val recs = remember(band, records.size, pool.size, batch) {
-        Recommender.recommend(band, pool, records)
+    // 换一批时排除刚看过的那三个，否则"换"完还是同一批，用户会觉得没在听
+    var excluded by remember { mutableStateOf(emptySet<String>()) }
+    val lateNight = hour >= 23 || hour < 5
+    val recs = remember(band, records.size, pool.size, batch, hour) {
+        Recommender.recommend(
+            band, pool, records, limit = 3,
+            constraints = RecommendationConstraints(
+                nightMode = lateNight,
+                excludeIds = excluded
+            )
+        )
     }
 
     Column(
@@ -641,7 +776,10 @@ private fun RecommendScreen(
 
         Spacer(Modifier.height(6.dp))
         Button(
-            onClick = { batch++ },
+            onClick = {
+                excluded = excluded + recs.map { it.action.id }
+                batch++
+            },
             modifier = Modifier.fillMaxWidth().height(50.dp),
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(containerColor = CardBg2, contentColor = TextMain)
@@ -659,13 +797,22 @@ private fun RecommendScreen(
 @Composable
 private fun TimerScreen(
     action: ActionItem,
+    pairStartMs: Long?,
     heartRate: Int?,
     onFinish: (Int?) -> Unit,
     onCancel: () -> Unit
 ) {
     val context = LocalContext.current
-    var secondsLeft by remember { mutableStateOf(action.minutes * 60) }
+    val clipboard = LocalClipboardManager.current
     val total = action.minutes * 60
+    var secondsLeft by remember {
+        mutableStateOf(
+            pairStartMs?.let { Pairing.remainingSeconds(action.minutes, it, System.currentTimeMillis()) }
+                ?: total
+        )
+    }
+    // 陪练码：什么时候点都能生成，用的都是"真正的开始时刻"，所以晚一分钟拉人也能对齐
+    var pairCode by remember { mutableStateOf<String?>(null) }
     val hrAtStart = remember { heartRate }
 
     LaunchedEffect(Unit) {
@@ -702,7 +849,45 @@ private fun TimerScreen(
             fontSize = 13.sp, color = TextDim
         )
 
-        Spacer(Modifier.height(40.dp))
+        // ---- 陪练 ----
+        Spacer(Modifier.height(18.dp))
+        if (pairStartMs != null) {
+            Text("陪练中 · 和对方同一秒开始，慢一点也没关系", fontSize = 12.sp, color = Amber)
+        } else if (pairCode == null) {
+            TextButton({
+                val startAt = System.currentTimeMillis() - (total - secondsLeft) * 1000L
+                pairCode = Pairing.encode(action, action.minutes, startAt)
+            }) { Text("一个人没劲？拉个人一起 →", color = TextDim, fontSize = 12.sp) }
+        } else {
+            val code = pairCode!!
+            SectionCard {
+                Text("陪练码", fontSize = 12.sp, color = TextDim)
+                Text(
+                    Pairing.pretty(code),
+                    fontSize = 24.sp, color = Mint, fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "让朋友在「回血实验室 → 用陪练码加入」里输入，两边就同步开始、同步结束。",
+                    fontSize = 11.sp, color = TextDim.copy(alpha = 0.8f)
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton({
+                        clipboard.setText(AnnotatedString(Pairing.pretty(code)))
+                    }) { Text("复制", color = Mint, fontSize = 13.sp) }
+                    TextButton({
+                        val text = Pairing.shareText(action, action.minutes, Pairing.pretty(code))
+                        val send = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, text)
+                        }
+                        context.startActivity(Intent.createChooser(send, "把陪练码发给他"))
+                    }) { Text("发给朋友", color = Mint, fontSize = 13.sp) }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(28.dp))
         Button(
             onClick = {
                 vibrate(context, 200)

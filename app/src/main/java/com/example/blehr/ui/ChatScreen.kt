@@ -1,5 +1,10 @@
 package com.example.blehr.ui
 
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -87,6 +92,8 @@ fun ChatScreen(
     }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var voiceError by remember { mutableStateOf<String?>(null) }
 
     fun send(text: String) {
         val t = text.trim()
@@ -96,6 +103,34 @@ fun ChatScreen(
         turns = turns + ChatTurn(true, t) + ChatTurn(false, reply.text, reply.recommendations.map { it.action })
         input = ""
         scope.launch { listState.animateScrollToItem(turns.size) }
+    }
+
+    // 语音走系统识别（RecognizerIntent），App 自己不录音、不要录音权限：
+    // 累到不想打字的时候，说一句比点开键盘省力得多。
+    val voiceLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
+        val said = res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+        if (res.resultCode == Activity.RESULT_OK && !said.isNullOrBlank()) {
+            voiceError = null
+            input = said
+            send(said)
+        } else {
+            voiceError = "没听清，再说一次？也可以直接打字。"
+        }
+    }
+
+    fun startVoice() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-CN")
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "说一句你现在的情况")
+        }
+        val resolved = runCatching { intent.resolveActivity(context.packageManager) }.getOrNull()
+        if (resolved == null) {
+            voiceError = "这台手机没装语音识别服务，先打字吧。"
+        } else {
+            runCatching { voiceLauncher.launch(intent) }
+                .onFailure { voiceError = "语音识别没能打开：${it.message ?: "未知原因"}" }
+        }
     }
 
     Column(
@@ -204,6 +239,16 @@ fun ChatScreen(
         }
         Spacer(Modifier.height(8.dp))
 
+        voiceError?.let {
+            Text(
+                it,
+                color = CDim,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
+            Spacer(Modifier.height(4.dp))
+        }
+
         Row(
             Modifier
                 .fillMaxWidth()
@@ -231,6 +276,11 @@ fun ChatScreen(
                 colors = ButtonDefaults.buttonColors(containerColor = CMint),
                 shape = RoundedCornerShape(14.dp)
             ) { Text("发", color = Color(0xFF04211B), fontWeight = FontWeight.Bold) }
+            Spacer(Modifier.width(6.dp))
+            TextButton(
+                onClick = { startVoice() },
+                shape = RoundedCornerShape(14.dp)
+            ) { Text("🎤", fontSize = 18.sp) }
         }
     }
 }
