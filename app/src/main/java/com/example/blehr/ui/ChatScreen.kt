@@ -95,7 +95,7 @@ fun ChatScreen(
         val reply = ChatAdvisor.reply(intent, band, pool, records)
         turns = turns + ChatTurn(true, t) + ChatTurn(false, reply.text, reply.recommendations.map { it.action })
         input = ""
-        scope.launch { listState.animateScrollToItem(turns.size + 8) }
+        scope.launch { listState.animateScrollToItem(turns.size) }
     }
 
     Column(

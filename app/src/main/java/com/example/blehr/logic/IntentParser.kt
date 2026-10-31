@@ -187,12 +187,10 @@ object ChatAdvisor {
         }
 
         if (recs.isEmpty()) {
-            sb.append("• 按这个条件没剩下合适的了，把时间放宽一点我再试试。")
+            sb.append("按这个条件没剩下合适的了，把时间放宽一点我再试试。")
         } else {
-            recs.forEachIndexed { i, r ->
-                sb.append("$i. ${r.action.emoji} ${r.action.title}（${r.action.minutes} 分钟）——${r.action.cue}\n")
-            }
-            sb.append("\n做完回来点一下，我记下这次到底有没有用。")
+            // 具体行动交给下面的卡片展示，正文里不重复列一遍（避免 0./1./2. 与卡片序号打架）
+            sb.append("下面 ${recs.size} 个，挑一个点「开始」就行。做完回来点一下，我记下这次到底有没有用。")
         }
 
         return ChatReply(sb.toString(), recs)
