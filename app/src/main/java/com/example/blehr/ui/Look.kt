@@ -63,7 +63,7 @@ object Look {
 
 /** 自己画的图标，24dp 网格，统一线宽。不引图标库，避免包体再涨一截。 */
 enum class GlyphKind {
-    POOL, CHART, PEOPLE, CHAT, PULSE, BELL, CLOCK, MIC
+    POOL, CHART, PEOPLE, CHAT, PULSE, BELL, CLOCK, MIC, BOLT
 }
 
 @Composable
@@ -175,6 +175,20 @@ private fun DrawScope.drawGlyph(kind: GlyphKind, s: Float, sw: Float, tint: Colo
             drawCircle(tint, radius = 0.36f * s, center = p(0.5f, 0.5f), style = Stroke(sw))
             line(0.5f, 0.5f, 0.5f, 0.28f)
             line(0.5f, 0.5f, 0.66f, 0.58f)
+        }
+
+        // 闪电：底部中央那个"现在就要一个办法"的按钮
+        GlyphKind.BOLT -> {
+            val path = Path().apply {
+                moveTo(0.56f * s, 0.10f * s)
+                lineTo(0.26f * s, 0.56f * s)
+                lineTo(0.48f * s, 0.56f * s)
+                lineTo(0.42f * s, 0.90f * s)
+                lineTo(0.74f * s, 0.42f * s)
+                lineTo(0.52f * s, 0.42f * s)
+                close()
+            }
+            drawPath(path, tint)
         }
 
         GlyphKind.MIC -> {

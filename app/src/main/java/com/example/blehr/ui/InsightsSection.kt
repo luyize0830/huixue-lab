@@ -79,25 +79,30 @@ fun InsightsSection(records: List<ExperimentRecord>, pool: List<ActionItem>) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(b.label, color = XDim, fontSize = 11.sp, modifier = Modifier.width(108.dp))
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .height(6.dp)
-                        .background(XCard, RoundedCornerShape(3.dp))
-                ) {
-                    val f = if (b.avgRating == null) 0f else (b.avgRating!!.toFloat() / 5f).coerceIn(0.02f, 1f)
+                if (b.count == 0) {
+                    // 没数据的时段不要画一条"满格空槽"，那会被读成"这一档很奇怪"
+                    Text("这个时段还没有实验", color = XDim.copy(alpha = 0.55f), fontSize = 11.sp)
+                } else {
                     Box(
                         Modifier
-                            .fillMaxWidth(f)
+                            .weight(1f)
                             .height(6.dp)
-                            .background(XAmber, RoundedCornerShape(3.dp))
+                            .background(XCard, RoundedCornerShape(3.dp))
+                    ) {
+                        val f = ((b.avgRating ?: 0.0).toFloat() / 5f).coerceIn(0.06f, 1f)
+                        Box(
+                            Modifier
+                                .fillMaxWidth(f)
+                                .height(6.dp)
+                                .background(XAmber, RoundedCornerShape(3.dp))
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "${InsightsEngine.fmt(b.avgRating ?: 0.0)} 分 · ${b.count} 次",
+                        color = XDim, fontSize = 11.sp
                     )
                 }
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    if (b.count == 0) "—" else "${InsightsEngine.fmt(b.avgRating ?: 0.0)} 分 · ${b.count} 次",
-                    color = XDim, fontSize = 11.sp
-                )
             }
         }
 

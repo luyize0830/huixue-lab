@@ -108,6 +108,7 @@ sealed class Screen {
     data class Feedback(val action: ActionItem, val hrBefore: Int?) : Screen()
     object Graph : Screen()
     object Pool : Screen()
+    data class Detail(val action: ActionItem) : Screen()
 }
 
 @Composable
@@ -199,13 +200,17 @@ fun HuixueApp(
             onSurface = Look.Ink
         )
     ) {
-        Box(
+        val isTab = screen == Screen.Home || screen == Screen.Graph ||
+            screen == Screen.Pool || screen == Screen.Join
+
+        Column(
             Modifier
                 .fillMaxSize()
                 .background(Bg)
                 .statusBarsPadding()
                 .navigationBarsPadding()
         ) {
+            Box(Modifier.weight(1f).fillMaxWidth()) {
             when (val s = screen) {
                 is Screen.Home -> HomeScreen(
                     assessment = assessment,
@@ -233,9 +238,6 @@ fun HuixueApp(
                     onToggleDemo = { forceDemo = !forceDemo },
                     onNeedBreak = { screen = Screen.Recommend },
                     onOpenChat = { screen = Screen.Chat },
-                    onOpenJoin = { screen = Screen.Join },
-                    onOpenGraph = { screen = Screen.Graph },
-                    onOpenPool = { screen = Screen.Pool },
                     wearable = wearable,
                     onRequestHealth = { healthLauncher.launch(HealthConnectSource.permissions) }
                 )
@@ -285,9 +287,36 @@ fun HuixueApp(
                     onSkip = { screen = Screen.Home }
                 )
 
-                is Screen.Graph -> GraphScreen(onBack = { screen = Screen.Home })
+                is Screen.Graph -> GraphTab()
 
-                is Screen.Pool -> PoolScreen(onBack = { screen = Screen.Home }, onStart = { screen = Screen.Timer(it) })
+                is Screen.Pool -> PoolTab(onOpenDetail = { screen = Screen.Detail(it) })
+
+                is Screen.Detail -> ActionDetailScreen(
+                    action = s.action,
+                    onStart = { screen = Screen.Timer(s.action) },
+                    onBack = { screen = Screen.Pool }
+                )
+            }
+            }
+
+            if (isTab) {
+                BottomNav(
+                    current = when (screen) {
+                        Screen.Pool -> Tab.POOL
+                        Screen.Graph -> Tab.GRAPH
+                        Screen.Join -> Tab.JOIN
+                        else -> Tab.HOME
+                    },
+                    onSelect = {
+                        screen = when (it) {
+                            Tab.POOL -> Screen.Pool
+                            Tab.GRAPH -> Screen.Graph
+                            Tab.JOIN -> Screen.Join
+                            Tab.HOME -> Screen.Home
+                        }
+                    },
+                    onStart = { screen = Screen.Recommend }
+                )
             }
         }
     }
@@ -380,7 +409,7 @@ private fun ScoreRing(score: Int, color: Color, size: Dp = 86.dp) {
     }
 }
 @Composable
-private fun BackRow(title: String, onBack: () -> Unit) {
+fun BackRow(title: String, onBack: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         TextButton(onClick = onBack) { Text("← 返回", color = TextDim) }
         Spacer(Modifier.width(4.dp))
@@ -417,9 +446,6 @@ private fun HomeScreen(
     onToggleDemo: () -> Unit,
     onNeedBreak: () -> Unit,
     onOpenChat: () -> Unit,
-    onOpenJoin: () -> Unit,
-    onOpenGraph: () -> Unit,
-    onOpenPool: () -> Unit,
     wearable: WearableSnapshot,
     onRequestHealth: () -> Unit
 ) {
@@ -534,22 +560,7 @@ private fun HomeScreen(
 
         Spacer(Modifier.height(18.dp))
 
-        // 三个入口用图标块，不再靠一行灰色文字 + 箭头
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            EntryTile(
-                GlyphKind.POOL, "回血池", "26 件小事",
-                Modifier.weight(1f)
-            ) { onOpenPool() }
-            EntryTile(
-                GlyphKind.CHART, "回血图谱", "哪种最有效",
-                Modifier.weight(1f)
-            ) { onOpenGraph() }
-            EntryTile(
-                GlyphKind.PEOPLE, "陪练码", "同一秒开始",
-                Modifier.weight(1f)
-            ) { onOpenJoin() }
-        }
-
+        // 三个入口已经移到常驻底栏，首页不再重复一遍
         Spacer(Modifier.height(16.dp))
 
         // ---- 主动提醒（打扰是特权，默认开着但可一键关） ----
