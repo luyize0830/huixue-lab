@@ -1,6 +1,7 @@
 package com.example.blehr.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,12 +32,12 @@ import androidx.compose.ui.unit.sp
 import com.example.blehr.logic.Pairing
 import com.example.blehr.model.ActionItem
 
-private val JBg = Color(0xFF0D1117)
-private val JCard = Color(0xFF171D26)
-private val JMint = Color(0xFF3EDDC1)
-private val JText = Color(0xFFEDF2F7)
-private val JDim = Color(0xFF8B98A9)
-private val JRose = Color(0xFFFF7B7B)
+private val JBg = Look.Paper
+private val JCard = Look.Card
+private val JMint = Look.Olive
+private val JText = Look.Ink
+private val JDim = Look.InkSoft
+private val JRose = Look.Clay
 
 /**
  * 用陪练码加入一场别人已经开始的实验。
@@ -115,6 +116,7 @@ fun JoinScreen(
 
         Spacer(Modifier.height(24.dp))
         Card(
+            modifier = Modifier.border(1.dp, Look.Hair, RoundedCornerShape(16.dp)),
             colors = CardDefaults.cardColors(containerColor = JCard),
             shape = RoundedCornerShape(16.dp)
         ) {

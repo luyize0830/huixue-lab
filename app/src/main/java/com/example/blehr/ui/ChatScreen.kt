@@ -6,6 +6,7 @@ import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -50,12 +51,12 @@ import com.example.blehr.model.EnergyBand
 import com.example.blehr.model.ExperimentRecord
 import kotlinx.coroutines.launch
 
-private val CBg = Color(0xFF0D1117)
-private val CCard = Color(0xFF171D26)
-private val CBubble = Color(0xFF1E2632)
-private val CMint = Color(0xFF3EDDC1)
-private val CText = Color(0xFFEDF2F7)
-private val CDim = Color(0xFF8B98A9)
+private val CBg = Look.Paper
+private val CCard = Look.Card
+private val CBubble = Look.Card2
+private val CMint = Look.Olive
+private val CText = Look.Ink
+private val CDim = Look.InkSoft
 
 private data class ChatTurn(
     val fromUser: Boolean,
@@ -165,7 +166,7 @@ fun ChatScreen(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         Text(
                             turn.text,
-                            color = Color(0xFF04211B),
+                            color = Look.OnAccent,
                             modifier = Modifier
                                 .widthIn(max = 280.dp)
                                 .background(CMint, RoundedCornerShape(14.dp))
@@ -192,6 +193,7 @@ fun ChatScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(bottom = 6.dp)
+                                        .border(1.dp, Look.Hair, RoundedCornerShape(12.dp))
                                         .clickable { onPick(a) },
                                     shape = RoundedCornerShape(12.dp),
                                     colors = CardDefaults.cardColors(containerColor = CCard)
@@ -200,7 +202,7 @@ fun ChatScreen(
                                         Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(a.emoji, fontSize = 18.sp)
+                                        CategoryTag(a.category, size = 28.dp)
                                         Spacer(Modifier.width(10.dp))
                                         Column(Modifier.weight(1f)) {
                                             Text(a.title, color = CText, fontSize = 14.sp, fontWeight = FontWeight.Medium)
@@ -275,12 +277,12 @@ fun ChatScreen(
                 onClick = { send(input) },
                 colors = ButtonDefaults.buttonColors(containerColor = CMint),
                 shape = RoundedCornerShape(14.dp)
-            ) { Text("发", color = Color(0xFF04211B), fontWeight = FontWeight.Bold) }
+            ) { Text("发", color = Look.OnAccent, fontWeight = FontWeight.Bold) }
             Spacer(Modifier.width(6.dp))
             TextButton(
                 onClick = { startVoice() },
                 shape = RoundedCornerShape(14.dp)
-            ) { Text("🎤", fontSize = 18.sp) }
+            ) { Glyph(GlyphKind.MIC, size = 20.dp, tint = Look.InkSoft) }
         }
     }
 }

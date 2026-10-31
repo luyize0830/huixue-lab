@@ -35,11 +35,11 @@ import com.example.blehr.model.ExperimentRecord
 import com.example.blehr.notify.NudgeScheduler
 import com.example.blehr.notify.Reminders
 
-private val XCard = Color(0xFF1E2632)
-private val XMint = Color(0xFF3EDDC1)
-private val XAmber = Color(0xFFFFC266)
-private val XText = Color(0xFFEDF2F7)
-private val XDim = Color(0xFF8B98A9)
+private val XCard = Look.Card2
+private val XMint = Look.Olive
+private val XAmber = Look.Wheat
+private val XText = Look.Ink
+private val XDim = Look.InkSoft
 
 /** 把 CSV 丢进系统分享面板：用户可以发给自己、存进笔记，或者直接拖进电脑 */
 fun shareCsv(ctx: Context, records: List<ExperimentRecord>, pool: List<ActionItem>) {
@@ -95,7 +95,7 @@ fun InsightsSection(records: List<ExperimentRecord>, pool: List<ActionItem>) {
                 }
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    if (b.count == 0) "—" else "${InsightsEngine.fmt(b.avgRating ?: 0.0)}·${b.count}次",
+                    if (b.count == 0) "—" else "${InsightsEngine.fmt(b.avgRating ?: 0.0)} 分 · ${b.count} 次",
                     color = XDim, fontSize = 11.sp
                 )
             }
@@ -113,7 +113,7 @@ fun InsightsSection(records: List<ExperimentRecord>, pool: List<ActionItem>) {
                 ) {
                     Text("${i + 1}", color = XMint, fontSize = 12.sp, fontWeight = FontWeight.Bold,
                         modifier = Modifier.width(18.dp))
-                    Text(s.action.emoji, fontSize = 14.sp)
+                    CategoryTag(s.action.category, size = 22.dp)
                     Spacer(Modifier.width(6.dp))
                     Text(s.action.title, color = XText, fontSize = 13.sp, modifier = Modifier.weight(1f))
                     Text(
@@ -179,7 +179,7 @@ fun NudgeCard(ctx: Context) {
                 }
             },
             colors = SwitchDefaults.colors(
-                checkedThumbColor = Color(0xFF04211B),
+                checkedThumbColor = Look.OnAccent,
                 checkedTrackColor = XMint,
                 uncheckedTrackColor = XCard
             )

@@ -8,7 +8,9 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,7 +40,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,12 +51,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.health.connect.client.PermissionController
@@ -84,14 +90,14 @@ import java.time.LocalTime
 import kotlin.math.roundToInt
 
 // ---------------- 配色 ----------------
-private val Bg = Color(0xFF0D1117)
-private val CardBg = Color(0xFF171D26)
-private val CardBg2 = Color(0xFF1E2632)
-private val Mint = Color(0xFF3EDDC1)
-private val Amber = Color(0xFFFFC266)
-private val Rose = Color(0xFFFF7B7B)
-private val TextMain = Color(0xFFEDF2F7)
-private val TextDim = Color(0xFF8B98A9)
+private val Bg = Look.Paper
+private val CardBg = Look.Card
+private val CardBg2 = Look.Card2
+private val Mint = Look.Olive
+private val Amber = Look.Wheat
+private val Rose = Look.Clay
+private val TextMain = Look.Ink
+private val TextDim = Look.InkSoft
 
 sealed class Screen {
     object Home : Screen()
@@ -185,12 +191,12 @@ fun HuixueApp(
     }
 
     MaterialTheme(
-        colorScheme = darkColorScheme(
-            primary = Mint,
-            background = Bg,
-            surface = CardBg,
-            onPrimary = Color(0xFF04211B),
-            onSurface = TextMain
+        colorScheme = lightColorScheme(
+            primary = Look.Accent,
+            background = Look.Paper,
+            surface = Look.Card,
+            onPrimary = Look.OnAccent,
+            onSurface = Look.Ink
         )
     ) {
         Box(
@@ -281,7 +287,7 @@ fun HuixueApp(
 
                 is Screen.Graph -> GraphScreen(onBack = { screen = Screen.Home })
 
-                is Screen.Pool -> PoolScreen(onBack = { screen = Screen.Home })
+                is Screen.Pool -> PoolScreen(onBack = { screen = Screen.Home }, onStart = { screen = Screen.Timer(it) })
             }
         }
     }
@@ -292,11 +298,13 @@ fun HuixueApp(
 @Composable
 private fun SectionCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBg)
+        modifier = modifier
+            .fillMaxWidth()
+            .border(1.dp, Look.Hair, RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Look.Card)
     ) {
-        Column(Modifier.padding(18.dp), content = content)
+        Column(Modifier.padding(16.dp), content = content)
     }
 }
 
@@ -307,7 +315,7 @@ private fun Bar(fraction: Float, color: Color, height: Int = 8) {
             .fillMaxWidth()
             .height(height.dp)
             .clip(RoundedCornerShape(50))
-            .background(Color.White.copy(alpha = 0.10f))
+            .background(Look.Track)
     ) {
         Box(
             Modifier
@@ -331,6 +339,46 @@ private fun Chip(text: String, color: Color) {
     }
 }
 
+@Composable
+private fun BandPill(text: String, color: Color) {
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(color.copy(alpha = 0.10f))
+            .padding(horizontal = 9.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Dot(color, 5.dp)
+        Spacer(Modifier.width(5.dp))
+        Text(text, color = color, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+/** 分数用环形表盘，比一根横条更像"电量"，也省掉一个巨大的数字占位。 */
+@Composable
+private fun ScoreRing(score: Int, color: Color, size: Dp = 86.dp) {
+    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val stroke = this.size.minDimension * 0.072f
+            val inset = stroke / 2f
+            val arcSize = androidx.compose.ui.geometry.Size(this.size.width - stroke, this.size.height - stroke)
+            drawArc(
+                color = Look.Track, startAngle = 0f, sweepAngle = 360f, useCenter = false,
+                topLeft = Offset(inset, inset), size = arcSize,
+                style = Stroke(stroke, cap = StrokeCap.Round)
+            )
+            drawArc(
+                color = color, startAngle = -90f, sweepAngle = 360f * (score / 100f), useCenter = false,
+                topLeft = Offset(inset, inset), size = arcSize,
+                style = Stroke(stroke, cap = StrokeCap.Round)
+            )
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("$score", fontSize = 25.sp, fontWeight = FontWeight.SemiBold, color = Look.Ink)
+            Text("/ 100", fontSize = 10.sp, color = Look.InkFaint)
+        }
+    }
+}
 @Composable
 private fun BackRow(title: String, onBack: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -385,92 +433,121 @@ private fun HomeScreen(
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("回血实验室", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextMain)
+                Text("回血实验室", fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = Look.Ink)
+                Spacer(Modifier.height(3.dp))
                 Text(
-                    if (totalExperiments == 0) "还没做过实验 · 今天可以开始第一次"
-                    else "已完成 $totalExperiments 次实验",
-                    fontSize = 12.sp, color = TextDim
+                    if (totalExperiments == 0) "今天 · 还没开始第一次" else "今天 · 已完成 $totalExperiments 次",
+                    fontSize = 12.sp, color = Look.InkFaint
                 )
             }
-            Box(
+            Row(
                 Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(if (heartRate != null) Mint.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.08f))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(if (heartRate != null) Look.Olive.copy(alpha = 0.10f) else Look.Card2)
+                    .border(
+                        1.dp,
+                        if (heartRate != null) Look.Olive.copy(alpha = 0.22f) else Look.Hair,
+                        RoundedCornerShape(11.dp)
+                    )
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                val beat = heartRate != null
+                Glyph(GlyphKind.PULSE, size = 14.dp, tint = if (beat) Look.Olive else Look.InkFaint)
+                Spacer(Modifier.width(6.dp))
                 Text(
-                    heartRate?.let { "♥ $it bpm" } ?: "未连手环",
-                    color = if (heartRate != null) Mint else TextDim,
-                    fontSize = 12.sp
+                    heartRate?.let { "$it bpm" } ?: "未连手环",
+                    color = if (beat) Look.Olive else Look.InkFaint,
+                    fontSize = 12.sp,
+                    fontWeight = if (beat) FontWeight.Medium else FontWeight.Normal
                 )
             }
         }
 
         Spacer(Modifier.height(24.dp))
 
-        SectionCard {
-            Text("此刻精力余额", fontSize = 13.sp, color = TextDim)
-            Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text("${assessment.score}", fontSize = 56.sp, fontWeight = FontWeight.Bold, color = accent)
-                Spacer(Modifier.width(6.dp))
-                Text("/ 100", fontSize = 14.sp, color = TextDim, modifier = Modifier.padding(bottom = 10.dp))
-                Spacer(Modifier.weight(1f))
-                Chip(assessment.band.label, accent)
-            }
-            Spacer(Modifier.height(12.dp))
-            Bar(assessment.score / 100f, accent, 10)
-            Spacer(Modifier.height(16.dp))
-            Text(assessment.headline, fontSize = 16.sp, color = TextMain, fontWeight = FontWeight.Medium)
-
-            Spacer(Modifier.height(10.dp))
-            Text(
-                if (showReasons) "收起判断依据 ▲" else "这个分数怎么来的？▼",
-                fontSize = 13.sp, color = Mint,
-                modifier = Modifier.clickable { showReasons = !showReasons }
-            )
-            if (showReasons) {
-                Spacer(Modifier.height(8.dp))
-                assessment.reasons.forEach {
-                    Text("· $it", fontSize = 13.sp, color = TextDim, modifier = Modifier.padding(vertical = 2.dp))
+        Card(
+            Modifier
+                .fillMaxWidth()
+                .border(1.dp, Look.Hair, RoundedCornerShape(18.dp)),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = Look.Card)
+        ) {
+            Column(Modifier.padding(18.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("此刻精力余额", fontSize = 12.sp, color = Look.InkFaint, letterSpacing = 0.4.sp)
+                    Spacer(Modifier.weight(1f))
+                    BandPill(assessment.band.label, accent)
                 }
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "这里只做状态粗判，不做任何医学结论。",
-                    fontSize = 11.sp, color = TextDim.copy(alpha = 0.7f)
-                )
+                Spacer(Modifier.height(16.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ScoreRing(score = assessment.score, color = accent)
+                    Spacer(Modifier.width(18.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(assessment.headline, fontSize = 15.sp, color = Look.Ink, lineHeight = 22.sp)
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            if (showReasons) "收起依据" else "这个分是怎么来的？",
+                            fontSize = 12.sp, color = Look.Accent,
+                            modifier = Modifier.clickable { showReasons = !showReasons }
+                        )
+                        if (showReasons) {
+                            Spacer(Modifier.height(8.dp))
+                            assessment.reasons.forEach {
+                                Text("· $it", fontSize = 12.sp, color = Look.InkSoft, lineHeight = 18.sp)
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            Text("只做状态粗判，不做任何医学结论。", fontSize = 11.sp, color = Look.InkFaint)
+                        }
+                    }
+                }
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
 
         Button(
             onClick = onNeedBreak,
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = Color(0xFF08221C))
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Look.Accent, contentColor = Look.OnAccent)
         ) {
-            Text("我现在有点撑不住", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Text("撑不住了，找个 5 分钟能做完的", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
 
-        TextButton(onClick = onOpenChat, modifier = Modifier.fillMaxWidth()) {
-            Text("说不清也没关系，跟它说一句 →", color = Mint, fontSize = 13.sp)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .border(1.dp, Look.Hair, RoundedCornerShape(14.dp))
+                .clickable(onClick = onOpenChat)
+                .padding(vertical = 12.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Glyph(GlyphKind.CHAT, size = 16.dp, tint = Look.Accent)
+            Spacer(Modifier.width(8.dp))
+            Text("说不清也行，说一句就好", fontSize = 14.sp, color = Look.Accent)
         }
 
+        Spacer(Modifier.height(18.dp))
+
+        // 三个入口用图标块，不再靠一行灰色文字 + 箭头
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TextButton(onClick = onOpenPool, modifier = Modifier.weight(1f)) {
-                Text("我的回血池", color = TextDim, fontSize = 14.sp)
-            }
-            TextButton(onClick = onOpenGraph, modifier = Modifier.weight(1f)) {
-                Text("回血图谱", color = TextDim, fontSize = 14.sp)
-            }
-        }
-
-        // 陪练：一个人容易半途而废，两个人就不好意思先走
-        TextButton(onClick = onOpenJoin, modifier = Modifier.fillMaxWidth()) {
-            Text("有朋友的陪练码？从这里加入 →", color = TextDim, fontSize = 12.sp)
+            EntryTile(
+                GlyphKind.POOL, "回血池", "26 件小事",
+                Modifier.weight(1f)
+            ) { onOpenPool() }
+            EntryTile(
+                GlyphKind.CHART, "回血图谱", "哪种最有效",
+                Modifier.weight(1f)
+            ) { onOpenGraph() }
+            EntryTile(
+                GlyphKind.PEOPLE, "陪练码", "同一秒开始",
+                Modifier.weight(1f)
+            ) { onOpenJoin() }
         }
 
         Spacer(Modifier.height(16.dp))
@@ -639,7 +716,7 @@ private fun HomeScreen(
 
             // ---- 身体活动（计步器）----
             Spacer(Modifier.height(8.dp))
-            Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.07f)))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Look.Hair))
             Spacer(Modifier.height(10.dp))
             Text("身体活动", fontSize = 13.sp, color = TextDim)
             Spacer(Modifier.height(4.dp))
@@ -721,7 +798,9 @@ private fun RecommendScreen(
     var batch by remember { mutableStateOf(0) }
     // 换一批时排除刚看过的那三个，否则"换"完还是同一批，用户会觉得没在听
     var excluded by remember { mutableStateOf(emptySet<String>()) }
-    val lateNight = hour >= 23 || hour < 5
+    val lateNight = hour >= 23 
+
+ hour < 5
     val recs = remember(band, records.size, pool.size, batch, hour) {
         Recommender.recommend(
             band, pool, records, limit = 3,
@@ -752,13 +831,14 @@ private fun RecommendScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 12.dp)
+                    .border(1.dp, Look.Hair, RoundedCornerShape(16.dp))
                     .clickable { onPick(rec.action) },
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = CardBg)
             ) {
                 Column(Modifier.padding(18.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(rec.action.emoji, fontSize = 26.sp)
+                        CategoryTag(rec.action.category, size = 40.dp)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(rec.action.title, fontSize = 17.sp, color = TextMain, fontWeight = FontWeight.Medium)
@@ -831,7 +911,7 @@ private fun TimerScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text(action.emoji, fontSize = 44.sp)
+        CategoryTag(action.category, size = 64.dp)
         Spacer(Modifier.height(12.dp))
         Text(action.title, fontSize = 20.sp, color = TextMain, fontWeight = FontWeight.Medium)
         Text(action.cue, fontSize = 13.sp, color = TextDim, textAlign = TextAlign.Center)
@@ -939,22 +1019,30 @@ private fun FeedbackScreen(
         Text("你的感觉比数据更权威——这是这次实验最重要的记录。", fontSize = 13.sp, color = TextDim)
         Spacer(Modifier.height(24.dp))
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             val labels = listOf("没用", "一般", "还行", "有用", "很管用")
-            val emojis = listOf("😑", "🙂", "😌", "😊", "✨")
             labels.indices.forEach { i ->
                 val selected = rating == i + 1
-                Column(
+                Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(if (selected) Mint.copy(alpha = 0.18f) else CardBg)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (selected) Mint else CardBg)
+                        .border(
+                            1.dp,
+                            if (selected) Mint else Look.Hair,
+                            RoundedCornerShape(10.dp)
+                        )
                         .clickable { rating = i + 1 }
-                        .padding(vertical = 12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .padding(vertical = 14.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(emojis[i], fontSize = 22.sp)
-                    Text(labels[i], fontSize = 11.sp, color = if (selected) Mint else TextDim)
+                    Text(
+                        labels[i],
+                        fontSize = 12.sp,
+                        fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+                        color = if (selected) Look.OnAccent else TextDim
+                    )
                 }
             }
         }
@@ -963,7 +1051,7 @@ private fun FeedbackScreen(
         SectionCard {
             Text("本次实验记录", fontSize = 13.sp, color = TextDim)
             Spacer(Modifier.height(8.dp))
-            Text("${action.emoji}  ${action.title} · ${action.minutes} 分钟", fontSize = 15.sp, color = TextMain)
+            Text("${action.title} · ${action.minutes} 分钟", fontSize = 15.sp, color = TextMain)
             Spacer(Modifier.height(8.dp))
             Text(
                 when {
@@ -1061,7 +1149,7 @@ private fun GraphScreen(onBack: () -> Unit) {
             stats.forEach { st ->
                 SectionCard(modifier = Modifier.padding(bottom = 12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(st.action.emoji, fontSize = 20.sp)
+                        CategoryTag(st.action.category, size = 32.dp)
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
                             Text(st.action.title, fontSize = 15.sp, color = TextMain)
@@ -1108,7 +1196,7 @@ private fun GraphScreen(onBack: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PoolScreen(onBack: () -> Unit) {
+private fun PoolScreen(onBack: () -> Unit, onStart: (ActionItem) -> Unit) {
     var title by remember { mutableStateOf("") }
     var minutes by remember { mutableStateOf(5) }
     var category by remember { mutableStateOf(ActionCategory.PLAY) }
@@ -1137,13 +1225,31 @@ private fun PoolScreen(onBack: () -> Unit) {
                     .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(a.emoji, fontSize = 20.sp)
+                CategoryTag(a.category, size = 30.dp)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(a.title, fontSize = 15.sp, color = TextMain)
                     Text("${a.category.label} · ${a.minutes} 分钟", fontSize = 11.sp, color = TextDim)
                 }
-                TextButton(onClick = { Repo.removeAction(a.id) }) { Text("删", color = TextDim) }
+                Text(
+                    "开始",
+                    fontSize = 13.sp,
+                    color = Mint,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onStart(a) }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                )
+                Text(
+                    "删",
+                    fontSize = 13.sp,
+                    color = TextDim,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { Repo.removeAction(a.id) }
+                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                )
             }
         }
 
