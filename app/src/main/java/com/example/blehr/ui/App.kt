@@ -1,6 +1,5 @@
 package com.example.blehr.ui
 
-import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -40,7 +39,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.lightColorScheme
+import androidx.health.connect.client.HealthConnectClient
+import com.example.blehr.ble.ScanHit
+import com.example.blehr.data.ProfileRepo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -109,6 +112,8 @@ sealed class Screen {
     object Graph : Screen()
     object Pool : Screen()
     data class Detail(val action: ActionItem) : Screen()
+    object Scan : Screen()
+    object Mine : Screen()
 }
 
 @Composable
@@ -116,16 +121,25 @@ fun HuixueApp(
     heartRate: Int?,
     hrStatus: String,
     restingHr: Int?,
-    devices: List<BluetoothDevice>,
-    onConnect: () -> Unit,
-    onPickDevice: (BluetoothDevice) -> Unit,
+    devices: List<ScanHit>,
+    connectedName: String?,
+    onStartScan: () -> Unit,
+    onStopScan: () -> Unit,
+    onPickDevice: (ScanHit) -> Unit,
     onDisconnect: () -> Unit,
     onRequestActivity: () -> Unit
 ) {
     var screen by remember { mutableStateOf<Screen>(Screen.Home) }
 
     // 系统返回键：在子页面里回首页，而不是直接把 App 关掉（答辩现场最容易踩到）
-    BackHandler(enabled = screen != Screen.Home) { screen = Screen.Home }
+    BackHandler(enabled = screen != Screen.Home) {
+        screen = when (screen) {
+            is Screen.Scan -> Screen.Mine
+            is Screen.Detail -> Screen.Pool
+            is Screen.Join -> Screen.Mine
+            else -> Screen.Home
+        }
+    }
 
     val ctx = LocalContext.current
     val usage = UsageRepo.snapshot
@@ -138,6 +152,23 @@ fun HuixueApp(
         PermissionController.createRequestPermissionResultContract()
     ) {
         scope.launch { HealthRepo.refresh(ctx) }
+    }
+
+    // 用户原话："点了没啥用，我想弄一个点击就可以自己操作"
+    // 所以这里不是直接 launch 就完事：先判断有没有装、要不要更新，失败也要有回音。
+    var hcMessage by remember { mutableStateOf<String?>(null) }
+    val requestHealth: () -> Unit = {
+        when {
+            HealthConnectSource.needsUpdate(ctx) -> {
+                runCatching { ctx.startActivity(HealthConnectSource.installIntent()) }
+                    .onFailure { hcMessage = "没找到应用商店，请手动安装 Health Connect。" }
+            }
+            HealthConnectSource.status(ctx) != HealthConnectClient.SDK_AVAILABLE -> {
+                hcMessage = "这台手机没有 Health Connect。手环历史可以先跳过，其它功能照常可用。"
+            }
+            else -> runCatching { healthLauncher.launch(HealthConnectSource.permissions) }
+                .onFailure { hcMessage = "打开授权页失败：${it.message}" }
+        }
     }
 
     // 手输值：没授权时用它；答辩想直接演到"低电量"也可以手动切
@@ -161,8 +192,13 @@ fun HuixueApp(
         }
     }
 
+    val versionText = remember {
+        runCatching {
+            ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName
+        }.getOrNull() ?: ""
+    }
+
     val snapshot = SensorSnapshot(
-        heartRate = heartRate,
         restingHr = restingHr,
         focusMinutes = focusMinutes,
         screenMinutesLastHour = screenMinutes,
@@ -201,7 +237,7 @@ fun HuixueApp(
         )
     ) {
         val isTab = screen == Screen.Home || screen == Screen.Graph ||
-            screen == Screen.Pool || screen == Screen.Join
+            screen == Screen.Pool || screen == Screen.Mine
 
         Column(
             Modifier
@@ -217,10 +253,9 @@ fun HuixueApp(
                     accent = accent,
                     heartRate = heartRate,
                     hrStatus = hrStatus,
-                    devices = devices,
+                    connectedName = connectedName,
                     totalExperiments = Repo.records.size,
-                    onConnect = onConnect,
-                    onPickDevice = onPickDevice,
+                    onOpenScan = { screen = Screen.Scan },
                     onDisconnect = onDisconnect,
                     focusMinutes = focusMinutes,
                     onFocusChange = { manualFocus = it; forceDemo = true },
@@ -239,7 +274,7 @@ fun HuixueApp(
                     onNeedBreak = { screen = Screen.Recommend },
                     onOpenChat = { screen = Screen.Chat },
                     wearable = wearable,
-                    onRequestHealth = { healthLauncher.launch(HealthConnectSource.permissions) }
+                    onRequestHealth = requestHealth
                 )
 
                 is Screen.Recommend -> RecommendScreen(
@@ -275,7 +310,43 @@ fun HuixueApp(
                     onJoined = { action, startAt ->
                         screen = Screen.Timer(action, startAt)
                     },
-                    onBack = { screen = Screen.Home }
+                    onBack = { screen = Screen.Mine }
+                )
+
+                is Screen.Scan -> ScanScreen(
+                    hits = devices,
+                    hrStatus = hrStatus,
+                    heartRate = heartRate,
+                    connectedName = connectedName,
+                    onStartScan = onStartScan,
+                    onPick = onPickDevice,
+                    onDisconnect = onDisconnect,
+                    onBack = { screen = Screen.Mine }
+                )
+
+                is Screen.Mine -> MineScreen(
+                    profile = ProfileRepo.current,
+                    onSaveProfile = { n, s, m -> ProfileRepo.save(ctx, n, s, m) },
+                    onSignOut = { ProfileRepo.signOut(ctx) },
+                    heartRate = heartRate,
+                    connectedName = connectedName,
+                    wearable = wearable,
+                    usageAuthorized = usage.available,
+                    activityAvailable = activity.available,
+                    nudgeEnabled = Reminders.isEnabled(ctx),
+                    onToggleNudge = { v ->
+                        Reminders.setEnabled(ctx, v)
+                        if (v) NudgeScheduler.start(ctx) else NudgeScheduler.stop(ctx)
+                    },
+                    recordCount = Repo.records.size,
+                    onOpenScan = { screen = Screen.Scan },
+                    onRequestHealth = requestHealth,
+                    onOpenUsageSettings = { ctx.startActivity(ScreenUsage.settingsIntent()) },
+                    onRequestActivity = onRequestActivity,
+                    onOpenJoin = { screen = Screen.Join },
+                    onExport = { shareCsv(ctx, Repo.records, Repo.pool) },
+                    onClearRecords = { Repo.clearRecords() },
+                    versionText = versionText
                 )
 
                 is Screen.Feedback -> FeedbackScreen(
@@ -304,14 +375,14 @@ fun HuixueApp(
                     current = when (screen) {
                         Screen.Pool -> Tab.POOL
                         Screen.Graph -> Tab.GRAPH
-                        Screen.Join -> Tab.JOIN
+                        Screen.Mine -> Tab.MINE
                         else -> Tab.HOME
                     },
                     onSelect = {
                         screen = when (it) {
                             Tab.POOL -> Screen.Pool
                             Tab.GRAPH -> Screen.Graph
-                            Tab.JOIN -> Screen.Join
+                            Tab.MINE -> Screen.Mine
                             Tab.HOME -> Screen.Home
                         }
                     },
@@ -425,10 +496,9 @@ private fun HomeScreen(
     accent: Color,
     heartRate: Int?,
     hrStatus: String,
-    devices: List<BluetoothDevice>,
+    connectedName: String?,
     totalExperiments: Int,
-    onConnect: () -> Unit,
-    onPickDevice: (BluetoothDevice) -> Unit,
+    onOpenScan: () -> Unit,
     onDisconnect: () -> Unit,
     focusMinutes: Int,
     onFocusChange: (Int) -> Unit,
@@ -576,21 +646,18 @@ private fun HomeScreen(
             Spacer(Modifier.height(8.dp))
             Text(hrStatus, fontSize = 13.sp, color = TextMain)
             Spacer(Modifier.height(10.dp))
+            if (connectedName != null) {
+                Text("已连上 $connectedName", fontSize = 12.sp, color = Mint)
+                Spacer(Modifier.height(6.dp))
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = onConnect) { Text("搜索设备", color = Mint) }
+                TextButton(onClick = onOpenScan) { Text("搜索 / 连接设备", color = Mint) }
                 if (heartRate != null) TextButton(onClick = onDisconnect) { Text("断开", color = TextDim) }
             }
-            if (devices.isNotEmpty()) {
-                Spacer(Modifier.height(6.dp))
-                devices.forEach { d ->
-                    TextButton(onClick = { onPickDevice(d) }, modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            "${runCatching { d.name }.getOrNull() ?: "未命名"}  ${d.address}",
-                            color = TextDim, fontSize = 12.sp
-                        )
-                    }
-                }
-            }
+            Text(
+                "独立一页搜索，只挑「像手环」的排前面 —— 附近设备多的时候不用自己找。",
+                fontSize = 11.sp, color = TextDim
+            )
         }
 
         Spacer(Modifier.height(16.dp))

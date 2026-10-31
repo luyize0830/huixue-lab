@@ -49,8 +49,21 @@
             </intent-filter>
         </activity>
 
-        <receiver
-            android:name=".notify.NudgeReceiver"
+        <!-- Health Connect 的授权说明页：Android 14+ 没有它，授权弹窗可能一闪而过 -->
+        <activity
+            android:name=".PermissionsRationaleActivity"
+            android:exported="true"
+            android:label="回血实验室 的数据说明">
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity>
+
+        <receiver            android:name=".notify.NudgeReceiver"
             android:exported="false" />
     </application>
 

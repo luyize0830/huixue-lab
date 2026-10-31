@@ -1,6 +1,8 @@
 package com.example.blehr.data
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +49,20 @@ object HealthConnectSource {
 
     fun isAvailable(ctx: Context): Boolean =
         status(ctx) == HealthConnectClient.SDK_AVAILABLE
+
+    /** 有没有装、要不要更新：界面要据此显示"去授权"还是"去安装"，否则点了没反应 */
+    fun needsUpdate(ctx: Context): Boolean =
+        status(ctx) == HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED
+
+    /** 需要装/更新 Health Connect 时，跳到应用商店 */
+    fun installIntent(): Intent = Intent(
+        Intent.ACTION_VIEW,
+        Uri.parse("market://details?id=com.google.android.apps.healthdata")
+    )
+
+    /** 去系统里看/改已授予的健康数据权限 */
+    fun settingsIntent(): Intent =
+        Intent(HealthConnectClient.ACTION_HEALTH_CONNECT_SETTINGS)
 
     fun client(ctx: Context): HealthConnectClient? = runCatching {
         HealthConnectClient.getOrCreate(ctx)

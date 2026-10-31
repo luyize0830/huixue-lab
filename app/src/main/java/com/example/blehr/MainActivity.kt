@@ -1,6 +1,5 @@
 package com.example.blehr
 
-import android.bluetooth.BluetoothDevice
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -10,8 +9,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.example.blehr.ble.HeartRateClient
+import com.example.blehr.ble.ScanHit
 import com.example.blehr.data.ActivityTracker
 import com.example.blehr.data.Repo
+import com.example.blehr.data.ProfileRepo
 import com.example.blehr.data.UsageRepo
 import com.example.blehr.notify.NudgeScheduler
 import com.example.blehr.notify.Reminders
@@ -24,7 +25,8 @@ class MainActivity : ComponentActivity() {
     private var heartRate by mutableStateOf<Int?>(null)
     private var restingHr by mutableStateOf<Int?>(null)
     private var hrStatus by mutableStateOf("还没连手环 —— 不连也能用，只是少了客观信号")
-    private var devices by mutableStateOf<List<BluetoothDevice>>(emptyList())
+    private var devices by mutableStateOf<List<ScanHit>>(emptyList())
+    private var connectedName by mutableStateOf<String?>(null)
 
     private val hrSamples = mutableListOf<Int>()
 
@@ -51,6 +53,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Repo.init(this)
+        ProfileRepo.init(this)
         Reminders.ensureChannel(this)
 
         // 计步器不需要用户主动触发，进 App 就开始观察；没有权限时内部自动标记不可用
@@ -63,7 +66,8 @@ class MainActivity : ComponentActivity() {
 
         client = HeartRateClient(this).also { c ->
             c.onStatus = { hrStatus = it }
-            c.onDeviceList = { devices = it }
+            c.onDevices = { devices = it }
+            c.onConnectedName = { connectedName = it }
             c.onHeartRate = { bpm ->
                 heartRate = bpm
                 // 会话内最低心率作为"静息基线"的近似（正式版应由设备历史数据提供）
@@ -79,12 +83,15 @@ class MainActivity : ComponentActivity() {
                 hrStatus = hrStatus,
                 restingHr = restingHr,
                 devices = devices,
-                onConnect = { requestPermissionsThenScan() },
-                onPickDevice = { device -> client.connect(device) },
+                connectedName = connectedName,
+                onStartScan = { requestPermissionsThenScan() },
+                onStopScan = { client.stopScan() },
+                onPickDevice = { hit -> client.connect(hit.device) },
                 onDisconnect = {
                     client.disconnect()
                     heartRate = null
                     restingHr = null
+                    connectedName = null
                     hrSamples.clear()
                 },
                 onRequestActivity = {

@@ -21,6 +21,38 @@ import androidx.core.content.ContextCompat
 import java.util.UUID
 
 /**
+ * 一次扫描命中的设备。
+ *
+ * 为什么不直接把 BluetoothDevice 丢给界面：附近几十个设备里，用户要找的是"我手上这只"。
+ * 所以这里补三个能帮上忙的字段：信号强度、名字、以及它有没有在广播标准心率服务。
+ */
+data class ScanHit(
+    val name: String?,
+    val address: String,
+    val rssi: Int,
+    val advertisedHr: Boolean,
+    val device: BluetoothDevice
+) {
+    /** 像是"能测心率的东西"：广告里有 0x180D，或者名字里带手环/表的常见词 */
+    val looksLikeBand: Boolean
+        get() {
+            if (advertisedHr) return true
+            val n = name?.lowercase() ?: return false
+            return listOf(
+                "mi band", "xiaomi", "amazfit", "band", "手环", "手表", "watch",
+                "heart", "hr-", "polar", "garmin", "coros", "whoop", "hw-", "honor"
+            ).any { n.contains(it) }
+        }
+
+    val displayName: String
+        get() = name?.takeIf { it.isNotBlank() } ?: "未命名设备"
+
+    /** 只在界面上露地址后四位：既能对上号，又不用用户读一长串 MAC */
+    val tail: String
+        get() = address.takeLast(5)
+}
+
+/**
  * 标准 BLE 心率客户端（HRS）。
  *
  * 刻意不引入任何厂商 SDK：任何支持心率广播的手环/胸带都能用，
@@ -30,14 +62,22 @@ class HeartRateClient(private val context: Context) {
 
     var onStatus: (String) -> Unit = {}
     var onHeartRate: (Int) -> Unit = {}
-    var onDeviceList: (List<BluetoothDevice>) -> Unit = {}
+
+    /** 扫描结果（已按"像不像手环" + 信号强弱排序） */
+    var onDevices: (List<ScanHit>) -> Unit = {}
+
+    /** 连上/断开时回报设备名，界面据此显示「已连上谁」 */
+    var onConnectedName: (String?) -> Unit = {}
 
     private val manager: BluetoothManager? =
         context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
 
     private var gatt: BluetoothGatt? = null
     private val handler = Handler(Looper.getMainLooper())
-    private val found = mutableListOf<BluetoothDevice>()
+    private val found = LinkedHashMap<String, ScanHit>()
+
+    var connectedName: String? = null
+        private set
 
     val isConnected: Boolean
         get() = gatt != null
@@ -48,10 +88,10 @@ class HeartRateClient(private val context: Context) {
     fun startScan(seconds: Long = 15_000) {
         val adapter = manager?.adapter
         if (adapter == null) { onStatus("这台设备没有蓝牙"); return }
-        if (!adapter.isEnabled) { onStatus("蓝牙没开"); return }
+        if (!adapter.isEnabled) { onStatus("蓝牙没开，先去系统里打开蓝牙"); return }
 
         found.clear()
-        onDeviceList(emptyList())
+        onDevices(emptyList())
         onStatus("正在搜索附近的设备…")
 
         val settings = ScanSettings.Builder()
@@ -60,9 +100,16 @@ class HeartRateClient(private val context: Context) {
         adapter.bluetoothLeScanner?.startScan(null, settings, scanCallback)
 
         handler.postDelayed({
-            adapter.bluetoothLeScanner?.stopScan(scanCallback)
-            if (found.isEmpty()) onStatus("没搜到设备。检查：手环是否开了心率广播、是否已被小米运动健康占用")
-            else onStatus("搜到 ${found.size} 个设备，点手环名字连接")
+            runCatching { adapter.bluetoothLeScanner?.stopScan(scanCallback) }
+            if (found.isEmpty()) {
+                onStatus("没搜到设备。检查：手环是否开了心率广播、是否已被小米运动健康占用")
+            } else {
+                val bands = found.values.count { it.looksLikeBand }
+                onStatus(
+                    if (bands > 0) "搜到 ${found.size} 个设备，其中 $bands 个像是手环"
+                    else "搜到 ${found.size} 个设备，没有明显像手环的——可能是没开广播"
+                )
+            }
         }, seconds)
     }
 
@@ -75,10 +122,17 @@ class HeartRateClient(private val context: Context) {
         @SuppressLint("MissingPermission")
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
             val d = result?.device ?: return
-            if (found.none { it.address == d.address }) {
-                found.add(d)
-                onDeviceList(found.toList())
-            }
+            val prev = found[d.address]
+            val advertised = result.scanRecord?.serviceUuids?.any { it.uuid == HRS_SERVICE } == true
+            val name = runCatching { d.name }.getOrNull() ?: prev?.name
+            found[d.address] = ScanHit(
+                name = name,
+                address = d.address,
+                rssi = result.rssi,
+                advertisedHr = advertised || (prev?.advertisedHr == true),
+                device = d
+            )
+            emit()
         }
 
         override fun onScanFailed(errorCode: Int) {
@@ -86,15 +140,25 @@ class HeartRateClient(private val context: Context) {
         }
     }
 
+    /** 像手环的排前面，同组内按信号从强到弱 */
+    private fun emit() {
+        val list = found.values.sortedWith(
+            compareByDescending<ScanHit> { it.looksLikeBand }.thenByDescending { it.rssi }
+        )
+        onDevices(list)
+    }
+
     // ---------------- 连接 ----------------
 
     @SuppressLint("MissingPermission")
     fun connect(device: BluetoothDevice) {
         stopScan()
-        gatt?.close()
+        runCatching { gatt?.close() }
         gatt = null
 
         val name = runCatching { device.name }.getOrNull() ?: device.address
+        connectedName = null
+        onConnectedName(null)
         onStatus("正在连接 $name …")
         gatt = device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
     }
@@ -104,6 +168,8 @@ class HeartRateClient(private val context: Context) {
         runCatching { gatt?.disconnect() }
         runCatching { gatt?.close() }
         gatt = null
+        connectedName = null
+        onConnectedName(null)
         onStatus("已断开")
     }
 
@@ -121,11 +187,16 @@ class HeartRateClient(private val context: Context) {
             }
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
+                    connectedName = runCatching { g?.device?.name }.getOrNull()
+                        ?: runCatching { g?.device?.address }.getOrNull()
+                    onConnectedName(connectedName)
                     onStatus("已连接，正在找心率服务…")
                     g?.discoverServices()
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     gatt = null
+                    connectedName = null
+                    onConnectedName(null)
                     onStatus("连接已断开")
                 }
             }

@@ -50,7 +50,7 @@ import com.example.blehr.model.ExperimentRecord
  * 4. 详情页自上而下固定顺序：大图形 → 标签行 → 一句怎么做 → 主按钮 → 参数区 → 说明。
  * 5. 空态不糊弄：没数据时写"还没有…"+ 一个明确动作，而不是摆一个 0。
  */
-enum class Tab { HOME, POOL, GRAPH, JOIN }
+enum class Tab { HOME, POOL, GRAPH, MINE }
 
 @Composable
 fun BottomNav(
@@ -83,7 +83,7 @@ fun BottomNav(
             }
 
             NavItem("图谱", GlyphKind.CHART, current == Tab.GRAPH) { onSelect(Tab.GRAPH) }
-            NavItem("陪练", GlyphKind.PEOPLE, current == Tab.JOIN) { onSelect(Tab.JOIN) }
+            NavItem("我的", GlyphKind.PEOPLE, current == Tab.MINE) { onSelect(Tab.MINE) }
         }
     }
 }
