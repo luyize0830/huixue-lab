@@ -67,7 +67,7 @@ object Look {
 
 /** 自己画的图标，24dp 网格，统一线宽。不引图标库，避免包体再涨一截。 */
 enum class GlyphKind {
-    POOL, CHART, PEOPLE, CHAT, PULSE, BELL, CLOCK, MIC, BOLT
+    POOL, CHART, PEOPLE, CHAT, PULSE, BELL, CLOCK, MIC, BOLT, SPEAKER
 }
 
 @Composable
@@ -205,6 +205,32 @@ private fun DrawScope.drawGlyph(kind: GlyphKind, s: Float, sw: Float, tint: Colo
             )
             line(0.5f, 0.84f, 0.5f, 0.94f)
             line(0.36f, 0.94f, 0.64f, 0.94f)
+        }
+
+        // 喇叭：实心梯形 + 两道声波。用在"念出来"的地方，比一个 🔊 更像自己画的。
+        GlyphKind.SPEAKER -> {
+            val horn = Path().apply {
+                moveTo(0.12f * s, 0.38f * s)
+                lineTo(0.27f * s, 0.38f * s)
+                lineTo(0.44f * s, 0.20f * s)
+                lineTo(0.44f * s, 0.80f * s)
+                lineTo(0.27f * s, 0.62f * s)
+                lineTo(0.12f * s, 0.62f * s)
+                close()
+            }
+            drawPath(horn, tint)
+            drawArc(
+                tint, -58f, 116f, false,
+                topLeft = p(0.46f, 0.34f),
+                size = Size(0.22f * s, 0.32f * s),
+                style = Stroke(sw, cap = StrokeCap.Round)
+            )
+            drawArc(
+                tint, -58f, 116f, false,
+                topLeft = p(0.52f, 0.22f),
+                size = Size(0.38f * s, 0.56f * s),
+                style = Stroke(sw, cap = StrokeCap.Round)
+            )
         }
     }
 }

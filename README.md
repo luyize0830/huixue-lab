@@ -284,3 +284,18 @@ SharedPreferences `huixue_persona`，key `preset_v1` / `custom_v1`）。136 个�
 她从不说「该休息了」这种模板话。句子由三部分组成：时段开场（「早。」「下午这个点最难熬。」）+ 她自己的事（刚睡醒 / 刚刷到一个视频 / 水开了）+ 追问上次你说过的话。担心的时候不绕弯子，只有一句「今天还行吗？」。
 
 技术上：`logic/Initiative.kt` 是纯函数（`shouldReachOut` 与 `line` 都能单测，12 个用例覆盖上面每一条）；`data/InitiativeStore.kt` 只负责读写磁盘与发通知；`ui/App.kt` 的 30 秒轮询里调一次，`ui/ChatScreen.kt` 打开时把她那句话接到对话开头（`InitiativeStore.clearPending` 之后就不会重复）。
+
+## 让她说话（v0.19）
+
+文字已经像人了，但一个人对着屏幕打字，和"有人应你一声"是两件事。v0.19 加的是**念出来**。
+
+| 决定 | 做法 | 理由 |
+| --- | --- | --- |
+| 谁来念 | 手机自带的 TTS（`android.speech.tts`） | 不打包音色、不要录音权限、不上传音频，包体也不涨 |
+| 默认开吗 | 关 | 第一次见面手机突然开口，比安静更吓人 |
+| 念多长 | 超过 120 字截断加"…" | 一口气念两分钟不像人，像导航 |
+| 什么时候停 | 离开对话页立刻 `shutdown` | App 在后台念稿子是最尴尬的一种"陪伴" |
+| 念不出来怎么办 | 页头写清原因（没引擎 / 没中文语音包） | 不静默失败：否则用户以为"她不会说话" |
+| 想重听 | 每条气泡下面一个小喇叭（只在开了语音时出现） | 装饰性的图标不该出现在关掉的功能里 |
+
+实现：`ui/Speaker.kt`（`rememberSpeaker()` 管 TTS 生命周期与失败原因）、`data/VoiceSettings.kt`（开关持久化）、`ui/Look.kt` 新增自绘的 `GlyphKind.SPEAKER`、`ui/ChatScreen.kt` 在 `LaunchedEffect` 里对新到的助手消息逐条 `say()`（历史不念），`ui/MineScreen.kt` 的「小夜」分区加开关。

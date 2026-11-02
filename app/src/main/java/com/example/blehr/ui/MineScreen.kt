@@ -72,6 +72,8 @@ fun MineScreen(
     onOpenJoin: () -> Unit,
     onOpenReport: () -> Unit,
     onOpenPersona: () -> Unit,
+    voiceEnabled: Boolean,
+    onToggleVoice: (Boolean) -> Unit,
     llmEnabled: Boolean,
     llmHasKey: Boolean,
     onToggleLlm: (Boolean) -> Unit,
@@ -321,6 +323,18 @@ fun MineScreen(
             chipText = "调整",
             chipColor = Look.Accent,
             onClick = onOpenPersona
+        )
+        Spacer(Modifier.height(8.dp))
+        EntryCard(
+            title = "让她说话",
+            subtitle = if (voiceEnabled) {
+                "她回你的时候会念出来。用的是手机自带的语音引擎，所以不占包体、也不要录音权限。"
+            } else {
+                "关着的时候只有文字。打开后她回你的每一条都会念一遍——音色取决于你手机里的语音包。"
+            },
+            chipText = if (voiceEnabled) "已打开" else "已关闭",
+            chipColor = if (voiceEnabled) Look.Olive else Look.InkSoft,
+            onClick = { onToggleVoice(!voiceEnabled) }
         )
 
         // ---- 记录 ----

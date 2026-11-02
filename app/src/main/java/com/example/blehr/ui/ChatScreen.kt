@@ -43,6 +43,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -102,6 +103,7 @@ fun ChatScreen(
     mood: MascotMood,
     onPick: (ActionItem) -> Unit,
     onEditPersona: () -> Unit,
+    voiceEnabled: Boolean = false,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -112,6 +114,22 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     var voiceError by remember { mutableStateOf<String?>(null) }
     var thinking by remember { mutableStateOf(false) }
+
+    // 念出来这件事是可选的：默认关，打开后她回的每一条都会轻轻念一遍。
+    val speaker = rememberSpeaker()
+    var spokenUpTo by remember { mutableStateOf(-1) }
+    LaunchedEffect(loaded, turns.size, voiceEnabled) {
+        if (!loaded || !voiceEnabled) return@LaunchedEffect
+        if (spokenUpTo < 0) {
+            // 第一次进来时历史里的旧话不念，只记下位置
+            spokenUpTo = turns.size
+            return@LaunchedEffect
+        }
+        if (turns.size > spokenUpTo) {
+            turns.drop(spokenUpTo).filter { !it.fromUser }.forEach { speaker.say(it.text) }
+            spokenUpTo = turns.size
+        }
+    }
 
     // 新消息或"正在输入…"出现时，把视图带到底部——否则提示停在屏幕外，等于没有
     LaunchedEffect(turns.size, thinking) {
@@ -340,6 +358,16 @@ fun ChatScreen(
             TextButton(onClick = onEditPersona) { Text("性格", color = CDim, fontSize = 12.sp) }
         }
 
+        // 开着语音但引擎不给力时，必须说出来——否则用户会以为"她不会说话"
+        if (voiceEnabled && speaker.reason != null) {
+            Text(
+                speaker.reason ?: "",
+                color = CDim,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
+            )
+        }
+
         LazyColumn(
             modifier = Modifier
                 .weight(1f)
@@ -379,6 +407,18 @@ fun ChatScreen(
                             fontSize = 14.sp,
                             lineHeight = 21.sp
                         )
+                        // 听一遍：不说话也能表示"我在听"的那个按钮。
+                        // 只在开了语音时出现，否则是死的装饰。
+                        if (voiceEnabled) {
+                            Box(
+                                Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .clickable { speaker.say(turn.text, flush = true) }
+                                    .padding(horizontal = 6.dp, vertical = 5.dp)
+                            ) {
+                                Glyph(GlyphKind.SPEAKER, size = 13.dp, tint = CDim.copy(alpha = 0.75f))
+                            }
+                        }
                         if (turn.actions.isNotEmpty()) {
                             Spacer(Modifier.height(8.dp))
                             turn.actions.forEach { a ->

@@ -78,6 +78,7 @@ import com.example.blehr.data.LlmConfig
 import com.example.blehr.data.Repo
 import com.example.blehr.data.ScreenUsage
 import com.example.blehr.data.UsageRepo
+import com.example.blehr.data.VoiceSettings
 import com.example.blehr.data.WearableSnapshot
 import com.example.blehr.logic.Recommender
 import com.example.blehr.logic.RecommendationConstraints
@@ -173,6 +174,8 @@ fun HuixueApp(
     // 大模型的开关与密钥放在本机；这里用可观察状态镜像一份，改完界面立刻能看到
     var llmEnabled by remember { mutableStateOf(LlmConfig.enabled(ctx)) }
     var llmKey by remember { mutableStateOf(LlmConfig.apiKey(ctx)) }
+    // 语音输出默认关：第一次见面就让手机开口说话，比安静更吓人
+    var voiceOn by remember { mutableStateOf(VoiceSettings.enabled(ctx)) }
 
     // Health Connect 的授权弹窗由系统承载，这里只负责发起、再读一次结果
     val healthLauncher = rememberLauncherForActivityResult(
@@ -349,6 +352,7 @@ fun HuixueApp(
                     hour = hour,
                     mood = MoodRule.of(assessment.score),
                     onEditPersona = { screen = Screen.Persona },
+                    voiceEnabled = voiceOn,
                     onPick = { action -> screen = Screen.Timer(action) },
                     onBack = { screen = Screen.Home }
                 )
@@ -399,6 +403,11 @@ fun HuixueApp(
                     onSaveProfile = { n, s, m -> ProfileRepo.save(ctx, n, s, m) },
             onOpenLogin = { loginEdit = true; screen = Screen.Login },
                     onOpenPersona = { screen = Screen.Persona },
+                    voiceEnabled = voiceOn,
+                    onToggleVoice = { v ->
+                        VoiceSettings.setEnabled(ctx, v)
+                        voiceOn = v
+                    },
                     onSignOut = { ProfileRepo.signOut(ctx) },
                     heartRate = heartRate,
                     connectedName = connectedName,
