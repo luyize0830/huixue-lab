@@ -124,10 +124,10 @@ BLE 解析与权限路径无法用 JVM 单测覆盖，靠真机验证（见 `doc
 
 ## 相关文档
 
-- `C:\Users\34243\Desktop\软件大赛\docs\00-技术验证-手环心率.md`
-- `C:\Users\34243\Desktop\软件大赛\docs\01-选题说明.md`
-- `C:\Users\34243\Desktop\软件大赛\docs\ARCHITECTURE.md`（架构与关键决策）
-- `C:\Users\34243\Desktop\软件大赛\docs\02-功能需求清单.md`（PRD v0.3）
+- `docs\00-技术验证-手环心率.md`
+- `docs\01-选题说明.md`
+- `docs\ARCHITECTURE.md`（架构与关键决策）
+- `docs\02-功能需求清单.md`（PRD v0.3）
 
 ## 结构与导航（v0.6 重做）
 
@@ -163,7 +163,7 @@ v0.7 的处理：
 2. **几何按 adaptive icon 安全区收**。圆形遮罩半径是 36/108，方形标记半宽上限 25.4，这里取 24.5（外框中心线 21 + 半描边 3.5），保证 Pixel 一类圆形/圆角遮罩不切角。麦色点也压在这条安全线以内。
 3. **矢量前景 + 各密度 webp 兜底**。`drawable/ic_launcher_foreground.xml` 是纯矢量（两条描边圆角矩形 + 一个圆），48px 到 512px 同一份几何；`mipmap-*/ic_launcher.webp` 是给老启动器的方/圆两套位图。
 
-生成脚本：`C:\Users\34243\Desktop\软件大赛\tools\make_icon.py`（改常量重跑即可换配色/比例），512 商店图在 `C:\Users\34243\Desktop\软件大赛\assets\app-icon-512.png`。
+生成脚本：`tools\make_icon.py`（改常量重跑即可换配色/比例），512 商店图在 `assets\app-icon-512.png`。
 
 ## 实验报告、HRV、可选大模型（v0.9）
 
