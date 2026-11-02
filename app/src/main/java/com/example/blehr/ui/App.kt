@@ -283,7 +283,8 @@ fun HuixueApp(
                     onNeedBreak = { screen = Screen.Recommend },
                     onOpenChat = { screen = Screen.Chat },
                     wearable = wearable,
-                    onRequestHealth = requestHealth
+                    onRequestHealth = requestHealth,
+                    showFish = llmKey.isNotBlank()
                 )
 
                 is Screen.Recommend -> RecommendScreen(
@@ -423,6 +424,47 @@ fun HuixueApp(
 
 // ---------------- 通用小组件 ----------------
 
+/**
+ * 大肥鱼卡片。
+ *
+ * 只在用户接了自己的 API 之后出现 —— 不是因为技术上必须，
+ * 而是想让它成为"这条鱼是你请回来的"这件事的可见奖励。
+ */
+@Composable
+private fun FishCard(mood: FishMood, onOpenChat: () -> Unit, lowState: Boolean) {
+    val line = when {
+        lowState -> "我有点担心你。今天绷得有点久了，让我用五分钟把你捞回来？"
+        mood == FishMood.HAPPY -> "状态挺好的呀，今天适合干点费脑子的活。"
+        else -> "我在。累的时候叫我一声，五分钟以内的事我都能安排。"
+    }
+    val cta = if (lowState) "让它挑一个" else "跟它说两句"
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(if (lowState) Look.SeaBelly.copy(alpha = 0.35f) else Look.Card)
+            .border(1.dp, Look.Hair, RoundedCornerShape(18.dp))
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        FishMascot(mood = mood, size = 76.dp)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("大肥鱼", fontSize = 11.sp, color = Look.InkFaint, letterSpacing = 0.6.sp)
+            Spacer(Modifier.height(5.dp))
+            Text(line, fontSize = 13.sp, color = Look.Ink, lineHeight = 20.sp)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "$cta →",
+                fontSize = 12.sp,
+                color = Look.SeaDeep,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.clickable(onClick = onOpenChat)
+            )
+        }
+    }
+}
 @Composable
 private fun SectionCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Card(
@@ -545,9 +587,12 @@ private fun HomeScreen(
     onNeedBreak: () -> Unit,
     onOpenChat: () -> Unit,
     wearable: WearableSnapshot,
-    onRequestHealth: () -> Unit
+    onRequestHealth: () -> Unit,
+    showFish: Boolean
 ) {
     var showReasons by remember { mutableStateOf(false) }
+    val fishMood = FishMoodRule.of(assessment.score)
+    val fishWorried = fishMood == FishMood.WORRIED
 
     Column(
         Modifier
@@ -654,6 +699,12 @@ private fun HomeScreen(
             Glyph(GlyphKind.CHAT, size = 16.dp, tint = Look.Accent)
             Spacer(Modifier.width(8.dp))
             Text("说不清也行，说一句就好", fontSize = 14.sp, color = Look.Accent)
+        }
+
+        // ---- 大肥鱼（接了自己的 API 才游出来）----
+        if (showFish) {
+            Spacer(Modifier.height(14.dp))
+            FishCard(mood = fishMood, onOpenChat = onOpenChat, lowState = fishWorried)
         }
 
         Spacer(Modifier.height(18.dp))

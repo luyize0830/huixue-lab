@@ -207,6 +207,12 @@ fun ChatScreen(
                     }
                 } else {
                     Column(Modifier.fillMaxWidth()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            FishMascot(mood = FishMood.IDLE, size = 22.dp, animated = false)
+                            Spacer(Modifier.width(6.dp))
+                            Text("大肥鱼", fontSize = 10.sp, color = CDim)
+                        }
+                        Spacer(Modifier.height(5.dp))
                         Text(
                             turn.text,
                             color = CText,

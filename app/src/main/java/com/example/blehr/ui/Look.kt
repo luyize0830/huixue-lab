@@ -59,6 +59,10 @@ object Look {
 
     val Accent = Color(0xFF3D5A4A)
     val OnAccent = Color(0xFFFBF9F5)
+    // 大肥鱼用的蓝：不刺眼，压在暖白纸上像一支彩笔画的
+    val Sea = Color(0xFF4A87C4)
+    val SeaDeep = Color(0xFF2E5F93)
+    val SeaBelly = Color(0xFFBBD7EC)
 }
 
 /** 自己画的图标，24dp 网格，统一线宽。不引图标库，避免包体再涨一截。 */
