@@ -73,6 +73,7 @@ import com.example.blehr.data.ActivitySnapshot
 import com.example.blehr.data.ActivityTracker
 import com.example.blehr.data.HealthConnectSource
 import com.example.blehr.data.HealthRepo
+import com.example.blehr.data.InitiativeStore
 import com.example.blehr.data.LlmConfig
 import com.example.blehr.data.Repo
 import com.example.blehr.data.ScreenUsage
@@ -208,12 +209,32 @@ fun HuixueApp(
     val focusMinutes = if (usingReal) usage.sessionMinutes else manualFocus
     val screenMinutes = if (usingReal) usage.foregroundMinutesLastHour else manualScreen
 
+    var charPending by remember { mutableStateOf(InitiativeStore.pending(ctx)) }
+
     LaunchedEffect(Unit) {
         while (true) {
             UsageRepo.refresh(ctx)
             ActivityTracker.refresh()
             HealthRepo.refresh(ctx)
             hour = LocalTime.now().hour
+            // 她会不会主动来找你：规则在 Initiative，落盘在 InitiativeStore
+            val s = StateEngine.assess(
+                SensorSnapshot(
+                    restingHr = restingHr,
+                    focusMinutes = focusMinutes,
+                    screenMinutesLastHour = screenMinutes,
+                    hourOfDay = hour,
+                    sedentaryMinutes = activity.stillMinutes
+                )
+            )
+            InitiativeStore.maybeReach(
+                ctx = ctx,
+                now = System.currentTimeMillis(),
+                hour = hour,
+                score = s.score,
+                notify = true
+            )
+            charPending = InitiativeStore.pending(ctx)
             delay(30_000L)
         }
     }
@@ -304,7 +325,8 @@ fun HuixueApp(
                     showChar = true,
                     charConnected = llmKey.isNotBlank(),
                     onOpenSetup = { screen = Screen.ModelSetup },
-                    nickname = ProfileRepo.current.nickname
+                    nickname = ProfileRepo.current.nickname,
+                    charPending = charPending
                 )
 
                 is Screen.Recommend -> RecommendScreen(
@@ -497,10 +519,13 @@ private fun CharCard(
     note: String?,
     connected: Boolean,
     onOpenSetup: () -> Unit,
-    nickname: String
+    nickname: String,
+    pending: String? = null
 ) {
+    // 她主动说的那句话优先显示：那是"她自己想说的"，不该被模板文案盖住
     val line = when {
         !connected -> if (nickname.isBlank()) "我还没上线。把你自己的 API Key 接给我，我就住在这台手机里。" else "我还没上线，$nickname。把你自己的 API Key 接给我，我就住在这台手机里。"
+        !pending.isNullOrBlank() -> pending
         lowState -> "你今天绷得有点久。别硬扛，跟我说一句，五分钟的事我来挑。"
         mood == MascotMood.HAPPY -> "状态不错嘛。趁这会儿把费脑子的活儿干一点？"
         !note.isNullOrBlank() -> "上次你说$note，后来怎么样了？"
@@ -508,6 +533,7 @@ private fun CharCard(
     }
     val cta = when {
         !connected -> "接入我的模型"
+        !pending.isNullOrBlank() -> "回她一句"
         lowState -> "让她挑一个"
         else -> "跟她说两句"
     }
@@ -672,6 +698,7 @@ private fun HomeScreen(
     onRequestHealth: () -> Unit,
     showChar: Boolean,
     nickname: String,
+    charPending: String? = null,
     charConnected: Boolean,
     onOpenSetup: () -> Unit
 ) {
@@ -796,7 +823,8 @@ private fun HomeScreen(
                 note = ChatMemory.note(androidx.compose.ui.platform.LocalContext.current),
                 connected = charConnected,
                 onOpenSetup = onOpenSetup,
-                nickname = nickname
+                nickname = nickname,
+                pending = charPending
             )
         }
 

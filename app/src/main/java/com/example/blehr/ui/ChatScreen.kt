@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.blehr.data.ChatMemory
+import com.example.blehr.data.InitiativeStore
 import com.example.blehr.data.LlmClient
 import com.example.blehr.data.LlmConfig
 import com.example.blehr.data.PersonaStore
@@ -131,13 +132,20 @@ fun ChatScreen(
         val firstToday = ChatMemory.lastTalkDay(context) != ChatMemory.dayKey(now)
 
         val restored = history.map { Bubble(it.fromUser, it.text) }
-        val greeting = if (firstToday) {
-            Bubble(
+
+        // 她主动找过你吗？有的话，先让她把手里那句话说完——
+        // 这条比她按点打招呼优先，因为它是"她自己想说的"。
+        val waiting = InitiativeStore.pending(context)
+        val greeting = when {
+            !waiting.isNullOrBlank() -> {
+                InitiativeStore.clearPending(context)
+                Bubble(fromUser = false, text = waiting)
+            }
+            firstToday -> Bubble(
                 fromUser = false,
                 text = Persona.greeting(mood, hour, hasMemory, note, ProfileRepo.current.nickname)
             )
-        } else {
-            null
+            else -> null
         }
         val head = if (restored.isEmpty() && greeting == null) {
             listOf(Bubble(false, "说一句你现在的情况就行。\n我会按你的时间、地点和状态挑几个五分钟内能做完的事。"))
@@ -146,8 +154,8 @@ fun ChatScreen(
         }
         turns = head + listOfNotNull(greeting)
 
-        if (firstToday) {
-            ChatMemory.append(context, ChatTurn(false, greeting!!.text, now))
+        if (firstToday || !waiting.isNullOrBlank()) {
+            greeting?.let { ChatMemory.append(context, ChatTurn(false, it.text, now)) }
             ChatMemory.markTalked(context, now)
         }
         scope.launch { listState.animateScrollToItem((turns.size - 1).coerceAtLeast(0)) }
