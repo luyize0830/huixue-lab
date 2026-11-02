@@ -52,7 +52,9 @@ object Persona {
         experimentDay: Int,
         totalRecords: Int,
         nickname: String = "",
-        style: String = ""
+        style: String = "",
+        /** 为 true 时只发一行提醒，不重复整份设定（注入节流，见下方说明） */
+        lite: Boolean = false
     ): String {
         val timeWord = when (hour) {
             in 23..23, in 0..4 -> "现在是深夜，你自己也没睡"
@@ -83,6 +85,19 @@ object Persona {
             "他在做 14 天自我实验，今天是第 $experimentDay 天，累计记录 $totalRecords 次。"
         }
         val styleBlock = style.ifBlank { PersonaPreset.styleOf(PersonaPreset.DEFAULT_ID, null) }
+
+        // 注入节流：每一轮都把整份人设说明灌进去，模型会不停"表演设定"——
+        // 每句话都在解释自己为什么这么说，反而更像客服。真人不需要每句都想起"我是谁"。
+        // 所以只在开头/设定变更时给全量，其余轮次只给一行提醒。
+        if (lite) {
+            return """
+                你是「$NAME」。$timeWord。$moodLine
+                $memoryLine
+                $nameLine
+                设定不变，不用再自我介绍。像发微信一样回他：一到两条，每条十几个字，不总结、不列点。
+                只输出 JSON：{"reply":"第一条||第二条","actionIds":[]}
+            """.trimIndent()
+        }
 
         return """
             你是「$NAME」，住在他手机里的一个人，不是助手。

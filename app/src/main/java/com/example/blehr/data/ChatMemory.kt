@@ -75,9 +75,13 @@ object ChatMemory {
     private const val KEY_TURNS = "turns_v1"
     private const val KEY_LAST_DAY = "last_talk_day_v1"
     private const val KEY_NOTE = "note_v1"
+    private const val KEY_INJECT = "inject_count_v1"
 
     const val MAX_TURNS = 40
     const val PROMPT_TURNS = 6
+
+    /** 每几轮重新灌一次完整人设（其余轮次只给一行提醒） */
+    const val FULL_INJECT_EVERY = 4
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -94,7 +98,33 @@ object ChatMemory {
     }
 
     fun clear(ctx: Context) {
-        prefs(ctx).edit().remove(KEY_TURNS).remove(KEY_LAST_DAY).remove(KEY_NOTE).apply()
+        prefs(ctx).edit().remove(KEY_TURNS).remove(KEY_LAST_DAY).remove(KEY_NOTE).remove(KEY_INJECT).apply()
+    }
+
+    /**
+     * 注入节流的开关：第 1 轮给全量人设，之后每 [FULL_INJECT_EVERY] 轮再给一次，
+     * 其余轮次只给一行提醒。
+     *
+     * 为什么这么做：每轮都把整份"你是小夜，你不许……你要……"灌进去，模型会一直
+     * 在表演设定——每句话都像在解释自己为什么这么说。真人聊天时并不需要反复想起
+     * "我是个什么人"。这也是"回复像客服"的第二个结构原因。
+     *
+     * @return true 表示这一轮需要发全量设定
+     */
+    fun needsFullInject(ctx: Context): Boolean {
+        val p = prefs(ctx)
+        val n = p.getInt(KEY_INJECT, 0)
+        return n % FULL_INJECT_EVERY == 0
+    }
+
+    fun bumpInject(ctx: Context) {
+        val p = prefs(ctx)
+        val n = (p.getInt(KEY_INJECT, 0) + 1) % 1000
+        p.edit().putInt(KEY_INJECT, n).apply()
+    }
+
+    fun resetInject(ctx: Context) {
+        prefs(ctx).edit().remove(KEY_INJECT).apply()
     }
 
     /** 上次说过话的那天，"2026-11-02" 这种；用来判断"今天第一次打开" */

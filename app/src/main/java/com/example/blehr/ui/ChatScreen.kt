@@ -62,6 +62,7 @@ import com.example.blehr.logic.LlmReplyParser
 import com.example.blehr.logic.MascotMood
 import com.example.blehr.logic.MoodRule
 import com.example.blehr.logic.Persona
+import com.example.blehr.logic.Rhythm
 import com.example.blehr.model.ActionItem
 import com.example.blehr.model.EnergyBand
 import com.example.blehr.model.ExperimentRecord
@@ -184,21 +185,32 @@ fun ChatScreen(
                 totalRecords = records.size,
                 nickname = ProfileRepo.current.nickname,
                 style = PersonaStore.style(context),
+                // 注入节流：只在开头和每 4 轮给一次完整人设，其余给一行提醒
+                fullInject = ChatMemory.needsFullInject(context),
                 history = ChatMemory.load(context).dropLast(1)
             )
             val suggestion = LlmClient.ask(context, t, pool, chat)
+            ChatMemory.bumpInject(context)
             val picked = suggestion?.let { LlmReplyParser.pick(pool, it.actionIds) }.orEmpty()
             if (suggestion != null) {
                 // 模型按约定用 || 分隔每条消息；Humanizer 再兜一层拆句与去客服腔。
-                // 一条一条蹦出来，而不是一大段——这是"像真人"最直接的一半。
+                // 一条一条蹦出来，中间按 Rhythm 停一下——这是"像真人"最直接的一半：
+                // 深夜回得慢、你只说两个字她不会憋很久、条与条之间像真在打字。
                 val parts = Humanizer.split(suggestion.reply)
+                val plan = Rhythm.plan(
+                    parts = parts.size,
+                    userChars = t.length,
+                    hour = hour,
+                    mood = mood
+                )
                 thinking = false
                 if (parts.isEmpty()) {
                     turns = turns + Bubble(false, "……")
                     ChatMemory.append(context, ChatTurn(false, "……", System.currentTimeMillis()))
                 } else {
-                    parts.forEachIndexed { index, part ->
-                        if (index > 0) delay(900L) else delay(400L)
+                    delay(plan.firstDelayMs)
+                    parts.take(plan.bubbles.coerceAtLeast(1)).forEachIndexed { index, part ->
+                        if (index > 0) delay(plan.gapMs)
                         turns = turns + Bubble(
                             false,
                             part,
