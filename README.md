@@ -29,6 +29,9 @@
 | 手环搜索独立页（v0.7） | ✅ 已实现 | `ui/ScanScreen.kt`：「像手环的」优先排序、信号格、15 秒倒计时、已连接状态卡 |
 | Health Connect 一键授权（v0.7） | ✅ 已实现 | 补了 `PermissionsRationaleActivity`；没装/要更新/不可用三种情况都有明确去向，不再"点了没反应" |
 | 「我的」页 + 本地账号（v0.7） | ✅ 已实现 | `ui/MineScreen.kt` + `data/Profile.kt`：昵称/学校/专业只存本机，无服务器无密码；授权与设置集中在这一页 |
+| 实验报告页（v0.9） | ✅ 已实现 | `logic/ExperimentReport.kt` + `ui/ReportScreen.kt`：按类别/时段聚合，每组 <3 次只列不排名，可导出 Markdown |
+| HRV（RMSSD，v0.9） | ✅ 已实现（依赖设备广播 R-R） | `logic/HrvMath.kt`：解析 0x2A37 的 R-R 间期算 RMSSD/SDNN/pNN50；设备只广播心率时如实显示"算不了" |
+| 对话层接大模型（v0.9，可选） | ✅ 已实现 | `logic/LlmAdvisor.kt` + `data/LlmClient.kt`：填了自己的 DeepSeek Key 就先用模型挑，失败自动退回本地规则；不填完全不影响使用 |
 
 ### 信号与权限矩阵（答辩会被问"数据哪来的"）
 
@@ -161,3 +164,18 @@ v0.7 的处理：
 3. **矢量前景 + 各密度 webp 兜底**。`drawable/ic_launcher_foreground.xml` 是纯矢量（两条描边圆角矩形 + 一个圆），48px 到 512px 同一份几何；`mipmap-*/ic_launcher.webp` 是给老启动器的方/圆两套位图。
 
 生成脚本：`C:\Users\34243\Desktop\软件大赛\tools\make_icon.py`（改常量重跑即可换配色/比例），512 商店图在 `C:\Users\34243\Desktop\软件大赛\assets\app-icon-512.png`。
+
+## 实验报告、HRV、可选大模型（v0.9）
+
+这三个都是"为了让评委相信这不是拍脑袋做的"而加的，不是为堆功能。
+
+1. **实验报告页**（`logic/ExperimentReport.kt` + `ui/ReportScreen.kt`）——把记录聚成"按类别 / 按时段"两张表，配三条硬口径：每组少于 3 次**只列不排名**（试过一两次就说"哪种最有效"是在骗自己）、心率变化只统计前后都有值的记录、报告末尾固定写 N=1 不可外推、不做因果断言。可导出 Markdown，直接贴进《技术研究报告》。
+2. **HRV（RMSSD）**（`logic/HrvMath.kt`）——从 `0x2A37` 的 flags bit4 里按 2 字节小端读 R-R，`raw*1000/1024` 换算毫秒，先过 300–2200ms 伪迹过滤，再算 RMSSD/SDNN/pNN50；样本不足 8 个就返回 null，界面上写"正在攒够 8 个再算"，设备只广播心率时写"这只设备可能只广播心率（那就算不了 HRV）"，绝不编数。
+3. **对话层接大模型（可选）**（`logic/LlmAdvisor.kt` + `logic/JsonLite.kt` + `data/LlmClient.kt`）——用户自己在「我的 · 理解方式」里填 DeepSeek Key 才启用；提示词里限定"只能从清单挑 2–3 件、深夜不挑社交类、图书馆教室不挑要说话的、不给医疗建议"，模型只回 `{"reply","actionIds","minutes"}`，解析失败/超时/断网一律退回本地规则并明说"（刚才没连上模型，这是本地规则给的）"。**没有 Key 时产品功能一点不少**——这是故意的：答辩现场没网也能演。
+
+为什么不用 `org.json`：它在 JVM 单测里会抛 "not mocked"，所以写了个 90 行的 `JsonLite`（去 ``` 围栏、截第一个花括号平衡块、还原转义），保证解析逻辑 100% 可单测。
+### 关于 API Key 的三条约束（v0.9.1）
+
+1. **不硬编码、不进仓库**：Key 只在运行时由用户填入，存进 `SharedPreferences`（应用私有目录），代码里没有任何默认 Key。
+2. **当场校验**：输入框要求以 `sk-` 开头且 ≥20 位，不合格直接禁用「保存」并给出提示——粘贴掉几个字符是常见事故，存进去只会得到"点了没反应"。
+3. **可随时清除**：弹窗里有「清除」，一键删掉本机 Key；关掉开关就完全回到本地规则，不联网也不花钱。

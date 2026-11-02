@@ -450,6 +450,17 @@ private fun LlmKeyDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
                         cursorColor = Look.Accent
                     )
                 )
+                // 粘贴/输入时掉几个字符太常见了，直接存下去只会得到"点了没反应"。
+                // 所以这里当场校验，不合格就不让保存。
+                val trimmed = key.trim()
+                val looksValid = trimmed.startsWith("sk-") && trimmed.length >= 20
+                if (trimmed.isNotEmpty() && !looksValid) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "看起来不完整：应该以 sk- 开头、20 位以上（共 51 位）。",
+                        fontSize = 11.sp, color = Look.Clay, lineHeight = 16.sp
+                    )
+                }
                 Spacer(Modifier.height(10.dp))
                 Text(
                     "发出去的只有：你刚打的那句话 + 可选行动目录（名字和时长）。" +
@@ -459,7 +470,10 @@ private fun LlmKeyDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(key.trim()) }) { Text("保存", color = Look.Accent) }
+            TextButton(
+                onClick = { onSave(key.trim()) },
+                enabled = key.trim().isEmpty() || (key.trim().startsWith("sk-") && key.trim().length >= 20)
+            ) { Text("保存", color = Look.Accent) }
         },
         dismissButton = {
             Row {
