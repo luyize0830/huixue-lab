@@ -52,11 +52,26 @@ class PersonaTest {
             totalRecords = 5
         )
         assertTrue(sys.contains(Persona.NAME))
-        assertTrue(sys.contains("不要喊"))
+        assertTrue(sys.contains("不喊加油"))
         assertTrue(sys.contains("不装医生"))
         assertTrue(sys.contains("昨天在赶报告"))
         assertTrue(sys.contains("第 3 天"))
         assertTrue(sys.contains("actionIds"))
+        // v0.14：默认不给行动卡，只有明确要建议时才给
+        assertTrue(sys.contains("默认不给"))
+    }
+
+    @Test
+    fun `用户改的说话方式会原样进提示词`() {
+        val mine = "说话像东北大姨，一句一个哎呀，别劝我。"
+        val sys = Persona.system(12, MascotMood.IDLE, null, 1, 0, style = mine)
+        assertTrue(sys.contains(mine))
+    }
+
+    @Test
+    fun `没传说话方式时用默认预设`() {
+        val sys = Persona.system(12, MascotMood.IDLE, null, 1, 0)
+        assertTrue(sys.contains(PersonaPreset.styleOf(PersonaPreset.DEFAULT_ID, null)))
     }
 
     @Test

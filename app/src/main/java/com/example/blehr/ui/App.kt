@@ -43,6 +43,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.lightColorScheme
 import androidx.health.connect.client.HealthConnectClient
 import com.example.blehr.ble.ScanHit
+import com.example.blehr.data.PersonaStore
 import com.example.blehr.data.ProfileRepo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -122,6 +123,7 @@ sealed class Screen {
     object Report : Screen()
     object ModelSetup : Screen()
     object Login : Screen()
+    object Persona : Screen()
 }
 
 @Composable
@@ -157,6 +159,7 @@ fun HuixueApp(
             is Screen.Join -> Screen.Mine
             is Screen.ModelSetup -> Screen.Home
             is Screen.Login -> if (loginEdit) Screen.Mine else Screen.Home
+            is Screen.Persona -> Screen.Mine
             else -> Screen.Home
         }
     }
@@ -318,6 +321,7 @@ fun HuixueApp(
                     records = Repo.records,
                     hour = hour,
                     mood = MoodRule.of(assessment.score),
+                    onEditPersona = { screen = Screen.Persona },
                     onPick = { action -> screen = Screen.Timer(action) },
                     onBack = { screen = Screen.Home }
                 )
@@ -351,10 +355,23 @@ fun HuixueApp(
                     onBack = { screen = Screen.Mine }
                 )
 
+                is Screen.Persona -> PersonaScreen(
+                    initialPresetId = PersonaStore.presetId(ctx),
+                    initialCustom = PersonaStore.custom(ctx),
+                    onSave = { id, custom ->
+                        PersonaStore.setPresetId(ctx, id)
+                        PersonaStore.setCustom(ctx, custom)
+                        screen = Screen.Mine
+                    },
+                    onReset = { PersonaStore.reset(ctx) },
+                    onBack = { screen = Screen.Mine }
+                )
+
                 is Screen.Mine -> MineScreen(
                     profile = ProfileRepo.current,
                     onSaveProfile = { n, s, m -> ProfileRepo.save(ctx, n, s, m) },
             onOpenLogin = { loginEdit = true; screen = Screen.Login },
+                    onOpenPersona = { screen = Screen.Persona },
                     onSignOut = { ProfileRepo.signOut(ctx) },
                     heartRate = heartRate,
                     connectedName = connectedName,

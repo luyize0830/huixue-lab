@@ -110,7 +110,8 @@ object LlmClient {
                 memory = chat.memory,
                 experimentDay = chat.experimentDay,
                 totalRecords = chat.totalRecords,
-                nickname = chat.nickname
+                nickname = chat.nickname,
+                style = chat.style
             ),
             user = Persona.user(text, pool, chat.hour, chat.band),
             history = chat.history

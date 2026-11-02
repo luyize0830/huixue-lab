@@ -15,5 +15,7 @@ data class ChatContext(
     val experimentDay: Int = 1,
     val totalRecords: Int = 0,
     val nickname: String = "",
+    /** 用户调过的说话方式（见 PersonaPreset）；空 = 用默认 */
+    val style: String = "",
     val history: List<ChatTurn> = emptyList()
 )

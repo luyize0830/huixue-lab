@@ -71,6 +71,7 @@ fun MineScreen(
     onRequestActivity: () -> Unit,
     onOpenJoin: () -> Unit,
     onOpenReport: () -> Unit,
+    onOpenPersona: () -> Unit,
     llmEnabled: Boolean,
     llmHasKey: Boolean,
     onToggleLlm: (Boolean) -> Unit,
@@ -309,6 +310,17 @@ fun MineScreen(
             chipText = if (llmHasKey) "更换" else "填写",
             chipColor = Look.Accent,
             onClick = { editingKey = true }
+        )
+
+        // ---- 角色 ----
+        Spacer(Modifier.height(20.dp))
+        SectionTitle("小夜")
+        EntryCard(
+            title = "她的性格",
+            subtitle = "换一种说话方式，或者自己写一段提示词",
+            chipText = "调整",
+            chipColor = Look.Accent,
+            onClick = onOpenPersona
         )
 
         // ---- 记录 ----

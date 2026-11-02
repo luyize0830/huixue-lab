@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import com.example.blehr.data.ChatMemory
 import com.example.blehr.data.LlmClient
 import com.example.blehr.data.LlmConfig
+import com.example.blehr.data.PersonaStore
 import com.example.blehr.data.ProfileRepo
 import com.example.blehr.logic.ChatAdvisor
 import com.example.blehr.logic.ChatContext
@@ -94,6 +95,7 @@ fun ChatScreen(
     hour: Int,
     mood: MascotMood,
     onPick: (ActionItem) -> Unit,
+    onEditPersona: () -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -173,6 +175,7 @@ fun ChatScreen(
                 experimentDay = experimentDay,
                 totalRecords = records.size,
                 nickname = ProfileRepo.current.nickname,
+                style = PersonaStore.style(context),
                 history = ChatMemory.load(context).dropLast(1)
             )
             val suggestion = LlmClient.ask(context, t, pool, chat)
@@ -241,7 +244,7 @@ fun ChatScreen(
                 Text(MoodRule.label(mood), color = CDim, fontSize = 10.sp)
             }
             Spacer(Modifier.weight(1f))
-            Box(Modifier.width(64.dp))
+            TextButton(onClick = onEditPersona) { Text("性格", color = CDim, fontSize = 12.sp) }
         }
 
         LazyColumn(
