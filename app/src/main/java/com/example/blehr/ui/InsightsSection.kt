@@ -186,7 +186,9 @@ fun NudgeCard(ctx: Context) {
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Look.OnAccent,
                 checkedTrackColor = XMint,
-                uncheckedTrackColor = XCard
+                uncheckedThumbColor = Look.InkFaint,
+                uncheckedTrackColor = Look.Track,
+                uncheckedBorderColor = Look.Hair
             )
         )
     }
