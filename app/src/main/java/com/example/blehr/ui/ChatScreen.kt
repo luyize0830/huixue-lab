@@ -44,8 +44,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.blehr.data.LlmClient
+import com.example.blehr.data.LlmConfig
 import com.example.blehr.logic.ChatAdvisor
 import com.example.blehr.logic.IntentParser
+import com.example.blehr.logic.LlmReplyParser
 import com.example.blehr.model.ActionItem
 import com.example.blehr.model.EnergyBand
 import com.example.blehr.model.ExperimentRecord
@@ -95,15 +98,43 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
     var voiceError by remember { mutableStateOf<String?>(null) }
+    var thinking by remember { mutableStateOf(false) }
 
     fun send(text: String) {
         val t = text.trim()
-        if (t.isEmpty()) return
-        val intent = IntentParser.parse(t, hour)
-        val reply = ChatAdvisor.reply(intent, band, pool, records)
-        turns = turns + ChatTurn(true, t) + ChatTurn(false, reply.text, reply.recommendations.map { it.action })
+        if (t.isEmpty() || thinking) return
+
+        // 先把用户这句挂上去，后面不管走模型还是本地规则，界面都已经有反馈
+        turns = turns + ChatTurn(true, t)
         input = ""
-        scope.launch { listState.animateScrollToItem(turns.size) }
+
+        val intent = IntentParser.parse(t, hour)
+        val local = ChatAdvisor.reply(intent, band, pool, records)
+
+        if (!LlmConfig.isReady(context)) {
+            turns = turns + ChatTurn(false, local.text, local.recommendations.map { it.action })
+            scope.launch { listState.animateScrollToItem(turns.size) }
+            return
+        }
+
+        thinking = true
+        scope.launch {
+            val suggestion = LlmClient.ask(context, t, pool, hour, band)
+            val picked = suggestion?.let { LlmReplyParser.pick(pool, it.actionIds) }.orEmpty()
+            val turn = if (suggestion != null && picked.isNotEmpty()) {
+                ChatTurn(false, suggestion.reply, picked)
+            } else {
+                // 模型不可用不是错误，只是降级：把"这是本地规则答的"直接告诉用户
+                ChatTurn(
+                    false,
+                    local.text + "\n\n（刚才没连上模型，这是本地规则给的）",
+                    local.recommendations.map { it.action }
+                )
+            }
+            turns = turns + turn
+            thinking = false
+            listState.animateScrollToItem(turns.size)
+        }
     }
 
     // 语音走系统识别（RecognizerIntent），App 自己不录音、不要录音权限：
@@ -215,6 +246,16 @@ fun ChatScreen(
                             }
                         }
                     }
+                }
+            }
+            item {
+                if (thinking) {
+                    Text(
+                        "正在想…",
+                        color = CDim,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                    )
                 }
             }
             item { Spacer(Modifier.height(8.dp)) }

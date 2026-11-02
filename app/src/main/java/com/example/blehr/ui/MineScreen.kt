@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.blehr.data.Profile
 import com.example.blehr.data.WearableSnapshot
+import com.example.blehr.logic.HrvMath
 
 /**
  * 「我的」页：账号 + 设备与数据授权 + 陪练 + 记录。
@@ -55,6 +56,8 @@ fun MineScreen(
     onSignOut: () -> Unit,
     heartRate: Int?,
     connectedName: String?,
+    hrvRmssd: Double?,
+    rrSupported: Boolean,
     wearable: WearableSnapshot,
     usageAuthorized: Boolean,
     activityAvailable: Boolean,
@@ -66,12 +69,18 @@ fun MineScreen(
     onOpenUsageSettings: () -> Unit,
     onRequestActivity: () -> Unit,
     onOpenJoin: () -> Unit,
+    onOpenReport: () -> Unit,
+    llmEnabled: Boolean,
+    llmHasKey: Boolean,
+    onToggleLlm: (Boolean) -> Unit,
+    onSaveLlmKey: (String) -> Unit,
     onExport: () -> Unit,
     onClearRecords: () -> Unit,
     versionText: String
 ) {
     var editing by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
+    var editingKey by remember { mutableStateOf(false) }
 
     Column(
         Modifier
@@ -152,9 +161,16 @@ fun MineScreen(
         EntryCard(
             title = if (heartRate != null) "手环已连接" else "手环（可选）",
             subtitle = when {
-                heartRate != null -> "正在读 $heartRate bpm" +
-                    (connectedName?.let { " · $it" } ?: "")
-                else -> "没连也能用，只是少了客观心率"
+                heartRate == null -> "没连也能用，只是少了客观心率"
+                hrvRmssd != null ->
+                    "正在读 $heartRate bpm" + (connectedName?.let { " · $it" } ?: "") +
+                        "\nRMSSD ${hrvRmssd.toInt()} ms · ${HrvMath.plainLabel(hrvRmssd) ?: ""}（心率波动，不是医学指标）"
+                rrSupported ->
+                    "正在读 $heartRate bpm" + (connectedName?.let { " · $it" } ?: "") +
+                        "\n收到 R-R 间期了，正在攒够 ${HrvMath.MIN_SAMPLES} 个再算"
+                else ->
+                    "正在读 $heartRate bpm" + (connectedName?.let { " · $it" } ?: "") +
+                        "\n没收到 R-R 间期：这只设备可能只广播心率（那就算不了 HRV）"
             },
             chipText = if (heartRate != null) "已连接" else "去连接",
             chipColor = if (heartRate != null) Look.Olive else Look.Accent,
@@ -255,9 +271,57 @@ fun MineScreen(
             )
         }
 
+        // ---- 理解方式 ----
+        Spacer(Modifier.height(20.dp))
+        SectionTitle("理解方式（可选）")
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(Look.Card)
+                .border(1.dp, Look.Hair, RoundedCornerShape(14.dp))
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("用大模型理解我那句", fontSize = 14.sp, color = Look.Ink)
+                Text(
+                    if (!llmHasKey) "填一个 API Key 才生效；不填就走本地规则，一样能用"
+                    else if (llmEnabled) "开着：先让模型挑，连不上就自动退回本地规则"
+                    else "关着：只用本地规则（不联网，也不花钱）",
+                    fontSize = 11.sp, color = Look.InkFaint, lineHeight = 15.sp
+                )
+            }
+            Switch(
+                checked = llmEnabled,
+                onCheckedChange = onToggleLlm,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Look.OnAccent,
+                    checkedTrackColor = Look.Accent
+                )
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        EntryCard(
+            title = if (llmHasKey) "API Key 已填写" else "填写 API Key",
+            subtitle = "只存在这台手机的应用私有目录里，不会发给我们的服务器（我们也没有服务器）。" +
+                "发出去的只有你刚打的那句话和行动目录，不含心率与历史记录。",
+            chipText = if (llmHasKey) "更换" else "填写",
+            chipColor = Look.Accent,
+            onClick = { editingKey = true }
+        )
+
         // ---- 记录 ----
         Spacer(Modifier.height(20.dp))
         SectionTitle("记录")
+        EntryCard(
+            title = "实验报告",
+            subtitle = "把记录汇成一页：按类别、按时段，够样本才给排名",
+            chipText = "打开",
+            chipColor = Look.Accent,
+            onClick = onOpenReport
+        )
+        Spacer(Modifier.height(8.dp))
         EntryCard(
             title = "一共 $recordCount 次实验",
             subtitle = "导出一份 CSV，可以拿去写报告或做自己的复盘",
@@ -336,12 +400,75 @@ fun MineScreen(
             containerColor = Look.Card
         )
     }
+
+    if (editingKey) {
+        LlmKeyDialog(
+            onDismiss = { editingKey = false },
+            onSave = { k ->
+                editingKey = false
+                onSaveLlmKey(k)
+            }
+        )
+    }
 }
 
 @Composable
 private fun SectionTitle(text: String) {
     SmallCaps(text)
     Spacer(Modifier.height(8.dp))
+}
+
+/**
+ * API Key 的填写框。
+ *
+ * 三件事必须明说：存在哪、会发什么出去、怎么删。少一句都算糊弄用户。
+ */
+@Composable
+private fun LlmKeyDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    var key by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("填写 API Key", color = Look.Ink) },
+        text = {
+            Column {
+                Text(
+                    "以 sk- 开头的那一串。存进本机应用私有目录，" +
+                        "不会上传到我们这边（我们没有服务器）。",
+                    fontSize = 12.sp, color = Look.InkSoft, lineHeight = 18.sp
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = key,
+                    onValueChange = { key = it },
+                    label = { Text("API Key") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Look.Accent,
+                        unfocusedBorderColor = Look.Hair,
+                        focusedLabelColor = Look.Accent,
+                        cursorColor = Look.Accent
+                    )
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "发出去的只有：你刚打的那句话 + 可选行动目录（名字和时长）。" +
+                        "心率、记录、账号都不会发。",
+                    fontSize = 11.sp, color = Look.InkFaint, lineHeight = 16.sp
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(key.trim()) }) { Text("保存", color = Look.Accent) }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = { onSave("") }) { Text("清除", color = Look.Clay) }
+                TextButton(onClick = onDismiss) { Text("取消", color = Look.InkSoft) }
+            }
+        },
+        containerColor = Look.Card
+    )
 }
 
 @Composable

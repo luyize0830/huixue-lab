@@ -19,6 +19,16 @@ import android.os.Handler
 import android.os.Looper
 import androidx.core.content.ContextCompat
 import java.util.UUID
+import kotlin.math.roundToInt
+
+/**
+ * 一次心率通知解出来的内容。
+ *
+ * [bpm] 是心率；[rrMs] 是设备附带广播的 R-R 间期（毫秒，已从 1/1024 秒换算）。
+ * 很多手环只发心率不发 R-R —— 空列表就是"这个设备不广播"，
+ * 界面据此说明"只能看心率，算不了 HRV"，而不是假装有。
+ */
+data class HrFrame(val bpm: Int, val rrMs: List<Int>)
 
 /**
  * 一次扫描命中的设备。
@@ -62,6 +72,9 @@ class HeartRateClient(private val context: Context) {
 
     var onStatus: (String) -> Unit = {}
     var onHeartRate: (Int) -> Unit = {}
+
+    /** 完整帧（含 R-R 间期）。只想要心率的话继续用 onHeartRate 就行 */
+    var onFrame: (HrFrame) -> Unit = {}
 
     /** 扫描结果（已按"像不像手环" + 信号强弱排序） */
     var onDevices: (List<ScanHit>) -> Unit = {}
@@ -252,8 +265,9 @@ class HeartRateClient(private val context: Context) {
     }
 
     private fun handleHeartRate(value: ByteArray?) {
-        val bpm = parseHeartRate(value) ?: return
-        onHeartRate(bpm)
+        val frame = parseFrame(value) ?: return
+        onHeartRate(frame.bpm)
+        onFrame(frame)
     }
 
     companion object {
@@ -278,16 +292,43 @@ class HeartRateClient(private val context: Context) {
                 ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
             }
 
-        /** flags bit0 = 0 → 心率占 1 字节；= 1 → 占 2 字节小端 */
-        fun parseHeartRate(value: ByteArray?): Int? {
+        /**
+         * 按 Bluetooth HRS（0x2A37）规范解一帧。
+         *
+         * 字节布局：flags(1) → 心率(1 或 2 字节，看 bit0) → [能量消耗(2)，看 bit3]
+         * → 若干 R-R 间期(每个 2 字节小端，单位 1/1024 秒，看 bit4)。
+         * 解析顺序写死在这里，是因为顺序错了不会报错，只会安静地算出错误的心率。
+         */
+        fun parseFrame(value: ByteArray?): HrFrame? {
             if (value == null || value.size < 2) return null
-            val flags = value[0].toInt()
-            return if (flags and 0x01 == 0) {
-                value[1].toInt() and 0xFF
+            val flags = value[0].toInt() and 0xFF
+            var i = 1
+
+            val bpm: Int
+            if (flags and 0x01 != 0) {
+                if (value.size < i + 2) return null
+                bpm = (value[i].toInt() and 0xFF) or ((value[i + 1].toInt() and 0xFF) shl 8)
+                i += 2
             } else {
-                if (value.size < 3) return null
-                (value[1].toInt() and 0xFF) or ((value[2].toInt() and 0xFF) shl 8)
+                bpm = value[i].toInt() and 0xFF
+                i += 1
             }
+
+            // bit3 = 有能量消耗字段，占 2 字节，不读会把它当成 R-R 的前半截
+            if (flags and 0x08 != 0) i += 2
+
+            val rr = ArrayList<Int>(4)
+            if (flags and 0x10 != 0) {
+                while (i + 1 < value.size) {
+                    val raw = (value[i].toInt() and 0xFF) or ((value[i + 1].toInt() and 0xFF) shl 8)
+                    i += 2
+                    if (raw > 0) rr.add((raw * 1000.0 / 1024.0).roundToInt())
+                }
+            }
+            return HrFrame(bpm, rr)
         }
+
+        /** 只要心率的旧入口，保留是为了不破坏既有调用与测试 */
+        fun parseHeartRate(value: ByteArray?): Int? = parseFrame(value)?.bpm
     }
 }

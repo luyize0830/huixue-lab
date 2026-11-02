@@ -9,7 +9,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.example.blehr.ble.HeartRateClient
+import com.example.blehr.ble.HrFrame
 import com.example.blehr.ble.ScanHit
+import com.example.blehr.logic.HrvMath
 import com.example.blehr.data.ActivityTracker
 import com.example.blehr.data.Repo
 import com.example.blehr.data.ProfileRepo
@@ -27,8 +29,24 @@ class MainActivity : ComponentActivity() {
     private var hrStatus by mutableStateOf("还没连手环 —— 不连也能用，只是少了客观信号")
     private var devices by mutableStateOf<List<ScanHit>>(emptyList())
     private var connectedName by mutableStateOf<String?>(null)
+    private var hrvRmssd by mutableStateOf<Double?>(null)
+    private var rrSupported by mutableStateOf(false)
 
     private val hrSamples = mutableListOf<Int>()
+
+    /** 最近 2 分钟的 R-R 间期，用来算短时 HRV；样本太旧会让 RMSSD 失真，所以带窗口 */
+    private val rrWindow = ArrayDeque<Int>()
+    private var rrAtMs = 0L
+
+    private fun onRrFrame(frame: HrFrame) {
+        if (frame.rrMs.isEmpty()) return
+        rrSupported = true
+        val now = System.currentTimeMillis()
+        rrWindow.addAll(frame.rrMs)
+        rrAtMs = now
+        while (rrWindow.size > 120) rrWindow.removeFirst()
+        hrvRmssd = HrvMath.rmssd(rrWindow.toList())
+    }
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -68,6 +86,7 @@ class MainActivity : ComponentActivity() {
             c.onStatus = { hrStatus = it }
             c.onDevices = { devices = it }
             c.onConnectedName = { connectedName = it }
+            c.onFrame = { frame -> onRrFrame(frame) }
             c.onHeartRate = { bpm ->
                 heartRate = bpm
                 // 会话内最低心率作为"静息基线"的近似（正式版应由设备历史数据提供）
@@ -84,6 +103,8 @@ class MainActivity : ComponentActivity() {
                 restingHr = restingHr,
                 devices = devices,
                 connectedName = connectedName,
+                hrvRmssd = hrvRmssd,
+                rrSupported = rrSupported,
                 onStartScan = { requestPermissionsThenScan() },
                 onStopScan = { client.stopScan() },
                 onPickDevice = { hit -> client.connect(hit.device) },
@@ -93,6 +114,8 @@ class MainActivity : ComponentActivity() {
                     restingHr = null
                     connectedName = null
                     hrSamples.clear()
+                    rrWindow.clear()
+                    hrvRmssd = null
                 },
                 onRequestActivity = {
                     if (ActivityTracker.hasPermission(this)) ActivityTracker.start(this)

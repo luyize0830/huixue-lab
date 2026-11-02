@@ -71,6 +71,7 @@ import com.example.blehr.data.ActivitySnapshot
 import com.example.blehr.data.ActivityTracker
 import com.example.blehr.data.HealthConnectSource
 import com.example.blehr.data.HealthRepo
+import com.example.blehr.data.LlmConfig
 import com.example.blehr.data.Repo
 import com.example.blehr.data.ScreenUsage
 import com.example.blehr.data.UsageRepo
@@ -114,6 +115,7 @@ sealed class Screen {
     data class Detail(val action: ActionItem) : Screen()
     object Scan : Screen()
     object Mine : Screen()
+    object Report : Screen()
 }
 
 @Composable
@@ -123,6 +125,8 @@ fun HuixueApp(
     restingHr: Int?,
     devices: List<ScanHit>,
     connectedName: String?,
+    hrvRmssd: Double?,
+    rrSupported: Boolean,
     onStartScan: () -> Unit,
     onStopScan: () -> Unit,
     onPickDevice: (ScanHit) -> Unit,
@@ -135,6 +139,7 @@ fun HuixueApp(
     BackHandler(enabled = screen != Screen.Home) {
         screen = when (screen) {
             is Screen.Scan -> Screen.Mine
+                is Screen.Report -> Screen.Mine
             is Screen.Detail -> Screen.Pool
             is Screen.Join -> Screen.Mine
             else -> Screen.Home
@@ -146,6 +151,10 @@ fun HuixueApp(
     val activity = ActivityTracker.snapshot
     val wearable = HealthRepo.snapshot
     val scope = rememberCoroutineScope()
+
+    // 大模型的开关与密钥放在本机；这里用可观察状态镜像一份，改完界面立刻能看到
+    var llmEnabled by remember { mutableStateOf(LlmConfig.enabled(ctx)) }
+    var llmKey by remember { mutableStateOf(LlmConfig.apiKey(ctx)) }
 
     // Health Connect 的授权弹窗由系统承载，这里只负责发起、再读一次结果
     val healthLauncher = rememberLauncherForActivityResult(
@@ -330,6 +339,8 @@ fun HuixueApp(
                     onSignOut = { ProfileRepo.signOut(ctx) },
                     heartRate = heartRate,
                     connectedName = connectedName,
+                    hrvRmssd = hrvRmssd,
+                    rrSupported = rrSupported,
                     wearable = wearable,
                     usageAuthorized = usage.available,
                     activityAvailable = activity.available,
@@ -344,9 +355,26 @@ fun HuixueApp(
                     onOpenUsageSettings = { ctx.startActivity(ScreenUsage.settingsIntent()) },
                     onRequestActivity = onRequestActivity,
                     onOpenJoin = { screen = Screen.Join },
+                    onOpenReport = { screen = Screen.Report },
+                    llmEnabled = llmEnabled,
+                    llmHasKey = llmKey.isNotBlank(),
+                    onToggleLlm = { v ->
+                        llmEnabled = v
+                        LlmConfig.setEnabled(ctx, v)
+                    },
+                    onSaveLlmKey = { k ->
+                        llmKey = k
+                        LlmConfig.setApiKey(ctx, k)
+                    },
                     onExport = { shareCsv(ctx, Repo.records, Repo.pool) },
                     onClearRecords = { Repo.clearRecords() },
                     versionText = versionText
+                )
+
+                is Screen.Report -> ReportScreen(
+                    records = Repo.records,
+                    pool = Repo.pool,
+                    onBack = { screen = Screen.Mine }
                 )
 
                 is Screen.Feedback -> FeedbackScreen(
