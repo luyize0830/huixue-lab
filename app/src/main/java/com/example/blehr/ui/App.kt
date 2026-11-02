@@ -120,6 +120,7 @@ sealed class Screen {
     object Scan : Screen()
     object Mine : Screen()
     object Report : Screen()
+    object ModelSetup : Screen()
 }
 
 @Composable
@@ -146,7 +147,8 @@ fun HuixueApp(
                 is Screen.Report -> Screen.Mine
             is Screen.Detail -> Screen.Pool
             is Screen.Join -> Screen.Mine
-            else -> Screen.Home
+                is Screen.ModelSetup -> Screen.Home
+                else -> Screen.Home
         }
     }
 
@@ -288,7 +290,9 @@ fun HuixueApp(
                     onOpenChat = { screen = Screen.Chat },
                     wearable = wearable,
                     onRequestHealth = requestHealth,
-                    showChar = llmKey.isNotBlank()
+                    showChar = true,
+                    charConnected = llmKey.isNotBlank(),
+                    onOpenSetup = { screen = Screen.ModelSetup }
                 )
 
                 is Screen.Recommend -> RecommendScreen(
@@ -383,6 +387,15 @@ fun HuixueApp(
                     onBack = { screen = Screen.Mine }
                 )
 
+                is Screen.ModelSetup -> ModelSetupScreen(
+                    onBack = { screen = Screen.Home },
+                    onSaved = {
+                        llmKey = LlmConfig.apiKey(ctx)
+                        llmEnabled = LlmConfig.enabled(ctx)
+                        screen = Screen.Home
+                    }
+                )
+
                 is Screen.Feedback -> FeedbackScreen(
                     action = s.action,
                     hrBefore = s.hrBefore,
@@ -436,14 +449,27 @@ fun HuixueApp(
  * 而是想让它成为"这个人是你的 API 请回来的"这件事的可见奖励。
  */
 @Composable
-private fun CharCard(mood: MascotMood, onOpenChat: () -> Unit, lowState: Boolean, note: String?) {
+private fun CharCard(
+    mood: MascotMood,
+    onOpenChat: () -> Unit,
+    lowState: Boolean,
+    note: String?,
+    connected: Boolean,
+    onOpenSetup: () -> Unit
+) {
     val line = when {
+        !connected -> "我还没上线。把你自己的 API Key 接给我，我就住在这台手机里。"
         lowState -> "你今天绷得有点久。别硬扛，跟我说一句，五分钟的事我来挑。"
         mood == MascotMood.HAPPY -> "状态不错嘛。趁这会儿把费脑子的活儿干一点？"
         !note.isNullOrBlank() -> "上次你说$note，后来怎么样了？"
         else -> "我在。累的时候叫我一声，五分钟以内的事我都能安排。"
     }
-    val cta = if (lowState) "让她挑一个" else "跟她说两句"
+    val cta = when {
+        !connected -> "接入我的模型"
+        lowState -> "让她挑一个"
+        else -> "跟她说两句"
+    }
+    val action = if (connected) onOpenChat else onOpenSetup
 
     Row(
         Modifier
@@ -460,7 +486,11 @@ private fun CharCard(mood: MascotMood, onOpenChat: () -> Unit, lowState: Boolean
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(Persona.NAME, fontSize = 11.sp, color = Look.InkFaint, letterSpacing = 0.6.sp)
                 Spacer(Modifier.width(6.dp))
-                Text(MoodRule.label(mood), fontSize = 10.sp, color = Look.SeaDeep.copy(alpha = 0.8f))
+                Text(
+                    if (connected) MoodRule.label(mood) else "还没上线",
+                    fontSize = 10.sp,
+                    color = Look.SeaDeep.copy(alpha = 0.8f)
+                )
             }
             Spacer(Modifier.height(5.dp))
             Text(line, fontSize = 13.sp, color = Look.Ink, lineHeight = 20.sp)
@@ -470,7 +500,7 @@ private fun CharCard(mood: MascotMood, onOpenChat: () -> Unit, lowState: Boolean
                 fontSize = 12.sp,
                 color = Look.SeaDeep,
                 fontWeight = FontWeight.Medium,
-                modifier = Modifier.clickable(onClick = onOpenChat)
+                modifier = Modifier.clickable(onClick = action)
             )
         }
     }
@@ -598,7 +628,9 @@ private fun HomeScreen(
     onOpenChat: () -> Unit,
     wearable: WearableSnapshot,
     onRequestHealth: () -> Unit,
-    showChar: Boolean
+    showChar: Boolean,
+    charConnected: Boolean,
+    onOpenSetup: () -> Unit
 ) {
     var showReasons by remember { mutableStateOf(false) }
     val charMood = MoodRule.of(assessment.score)
@@ -711,14 +743,16 @@ private fun HomeScreen(
             Text("说不清也行，说一句就好", fontSize = 14.sp, color = Look.Accent)
         }
 
-        // ---- 小夜（接了自己的 API 才会出现）----
+        // ---- 小夜（没接模型时她也在这儿，负责把入口指给你）----
         if (showChar) {
             Spacer(Modifier.height(14.dp))
             CharCard(
                 mood = charMood,
                 onOpenChat = onOpenChat,
                 lowState = charWorried,
-                note = ChatMemory.note(androidx.compose.ui.platform.LocalContext.current)
+                note = ChatMemory.note(androidx.compose.ui.platform.LocalContext.current),
+                connected = charConnected,
+                onOpenSetup = onOpenSetup
             )
         }
 
