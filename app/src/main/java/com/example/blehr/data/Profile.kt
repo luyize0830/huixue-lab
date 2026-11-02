@@ -62,6 +62,18 @@ object ProfileStore {
     fun signOut(ctx: Context) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove("profile_v1").apply()
     }
+
+    /**
+     * 认脸页只该出现一次。
+     * 用户点了「先不填，随便逛逛」，这个决定要记住——否则每次冷启动都拦一次，
+     * 等于用一次弹窗换一次卸载理由。
+     */
+    fun seen(ctx: Context): Boolean =
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("seen_v1", false)
+
+    fun markSeen(ctx: Context) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("seen_v1", true).apply()
+    }
 }
 
 /**

@@ -62,10 +62,12 @@ import com.example.blehr.logic.LlmReplyParser
 import com.example.blehr.logic.MascotMood
 import com.example.blehr.logic.MoodRule
 import com.example.blehr.logic.Persona
+import com.example.blehr.logic.ReplyGate
 import com.example.blehr.logic.Rhythm
 import com.example.blehr.model.ActionItem
 import com.example.blehr.model.EnergyBand
 import com.example.blehr.model.ExperimentRecord
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -110,6 +112,12 @@ fun ChatScreen(
     var voiceError by remember { mutableStateOf<String?>(null) }
     var thinking by remember { mutableStateOf(false) }
 
+    // 新消息或"正在输入…"出现时，把视图带到底部——否则提示停在屏幕外，等于没有
+    LaunchedEffect(turns.size, thinking) {
+        val target = (turns.size + 1).coerceAtLeast(0)
+        runCatching { listState.animateScrollToItem(target) }
+    }
+
     val experimentDay = remember { ChatMemory.dayIndex(records.minOfOrNull { it.ts }, System.currentTimeMillis()) }
 
     // 进界面先接记忆；今天第一次来，她先开口
@@ -145,91 +153,131 @@ fun ChatScreen(
         scope.launch { listState.animateScrollToItem((turns.size - 1).coerceAtLeast(0)) }
     }
 
+    // ── 回多慢 ────────────────────────────────────────────────────────
+    // 对方连发几条时先合并，别每条都抢着回；最后一句像半句话就再多等一会儿。
+    // 但等到上限也必须回 —— 陪伴角色沉默比说错话更伤人，这条写死在 ReplyGate 里。
+    var pending by remember { mutableStateOf(listOf<String>()) }
+    var pendingSinceLast by remember { mutableStateOf<Int?>(null) }
+    var lastUserTs by remember { mutableStateOf<Long?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var batchJob by remember { mutableStateOf<Job?>(null) }
+
+    suspend fun respond(merged: String, sinceLast: Int?) {
+        val now = System.currentTimeMillis()
+        val history = ChatMemory.load(context).filter { it.fromUser }
+        val chat = ChatContext(
+            hour = hour,
+            band = band,
+            mood = mood,
+            // 记"他最近具体说过的三句话"，比记一句抽象的情绪标签有用得多：
+            // 真人接话靠的是细节（你昨天说的那只猫），不是结论（你最近压力大）。
+            memory = history.takeLast(3).joinToString("；") { it.text.take(20) }
+                .ifBlank { ChatMemory.note(context) },
+            experimentDay = experimentDay,
+            totalRecords = records.size,
+            nickname = ProfileRepo.current.nickname,
+            style = PersonaStore.style(context),
+            minutesSinceLast = sinceLast,
+            // 注入节流：只在开头和每 4 轮给一次完整人设，其余给一行提醒
+            fullInject = ChatMemory.needsFullInject(context),
+            history = ChatMemory.load(context).dropLast(1)
+        )
+        val suggestion = LlmClient.ask(context, merged, pool, chat)
+        ChatMemory.bumpInject(context)
+        val picked = suggestion?.let { LlmReplyParser.pick(pool, it.actionIds) }.orEmpty()
+        if (suggestion != null) {
+            // 模型按约定用 || 分隔每条消息；Humanizer 再兜一层拆句与去客服腔。
+            // 一条一条蹦出来，中间按 Rhythm 停一下——这是"像真人"最直接的一半：
+            // 深夜回得慢、你只说两个字她不会憋很久、条与条之间像真在打字。
+            val parts = Humanizer.split(suggestion.reply)
+            val plan = Rhythm.plan(
+                parts = parts.size,
+                userChars = merged.length,
+                hour = hour,
+                mood = mood
+            )
+            thinking = false
+            if (parts.isEmpty()) {
+                // 模型啥也没给：不许沉默，兜一句话
+                val fallback = Persona.offlineLine(mood)
+                turns = turns + Bubble(false, fallback)
+                ChatMemory.append(context, ChatTurn(false, fallback, System.currentTimeMillis()))
+            } else {
+                delay(plan.firstDelayMs)
+                parts.take(plan.bubbles.coerceAtLeast(1)).forEachIndexed { index, part ->
+                    if (index > 0) delay(plan.gapMs)
+                    turns = turns + Bubble(
+                        false,
+                        part,
+                        if (index == parts.lastIndex) picked else emptyList()
+                    )
+                    ChatMemory.append(context, ChatTurn(false, part, System.currentTimeMillis()))
+                    listState.animateScrollToItem(turns.size)
+                }
+            }
+        } else {
+            val localFallback = ChatAdvisor
+                .reply(IntentParser.parse(merged, hour), band, pool, records)
+                .let { b ->
+                    Bubble(
+                        false,
+                        b.text + "\n\n（刚才没连上模型，这是本地规则给的）",
+                        b.recommendations.map { it.action }
+                    )
+                }
+            turns = turns + localFallback
+            ChatMemory.append(context, ChatTurn(false, localFallback.text, System.currentTimeMillis()))
+            thinking = false
+            listState.animateScrollToItem(turns.size)
+        }
+    }
+
     fun send(text: String) {
         val t = text.trim()
-        if (t.isEmpty() || thinking) return
+        if (t.isEmpty()) return
+        val now = System.currentTimeMillis()
+        if (pending.isEmpty()) pendingSinceLast = ReplyGate.minutesSince(lastUserTs, now)
+        lastUserTs = now
 
         turns = turns + Bubble(true, t)
         input = ""
-        val now = System.currentTimeMillis()
         ChatMemory.append(context, ChatTurn(true, t, now))
         // 用这句当作"上次聊到"，她下次能接上；只存前 24 字，不存整段
         ChatMemory.setNote(context, t.take(24))
         ChatMemory.markTalked(context, now)
 
-        val intent = IntentParser.parse(t, hour)
-        val local = ChatAdvisor.reply(intent, band, pool, records)
-
-        if (!LlmConfig.isReady(context)) {
-            val aiText = Persona.offlineLine(mood)
-            turns = turns + Bubble(false, aiText, local.recommendations.map { it.action })
-            ChatMemory.append(context, ChatTurn(false, aiText, now))
-            scope.launch { listState.animateScrollToItem(turns.size) }
-            return
-        }
-
+        pending = pending + t
+        // 一按发送就进入"正在输入…"，别让等待窗口看起来像没人管
         thinking = true
-        scope.launch {
-            val chat = ChatContext(
-                hour = hour,
-                band = band,
-                mood = mood,
-                // 记"他最近具体说过的三句话"，比记一句抽象的情绪标签有用得多：
-                // 真人接话靠的是细节（你昨天说的那只猫），不是结论（你最近压力大）。
-                memory = ChatMemory.load(context)
-                    .filter { it.fromUser }
-                    .takeLast(3)
-                    .joinToString("；") { it.text.take(20) }
-                    .ifBlank { ChatMemory.note(context) },
-                experimentDay = experimentDay,
-                totalRecords = records.size,
-                nickname = ProfileRepo.current.nickname,
-                style = PersonaStore.style(context),
-                // 注入节流：只在开头和每 4 轮给一次完整人设，其余给一行提醒
-                fullInject = ChatMemory.needsFullInject(context),
-                history = ChatMemory.load(context).dropLast(1)
-            )
-            val suggestion = LlmClient.ask(context, t, pool, chat)
-            ChatMemory.bumpInject(context)
-            val picked = suggestion?.let { LlmReplyParser.pick(pool, it.actionIds) }.orEmpty()
-            if (suggestion != null) {
-                // 模型按约定用 || 分隔每条消息；Humanizer 再兜一层拆句与去客服腔。
-                // 一条一条蹦出来，中间按 Rhythm 停一下——这是"像真人"最直接的一半：
-                // 深夜回得慢、你只说两个字她不会憋很久、条与条之间像真在打字。
-                val parts = Humanizer.split(suggestion.reply)
-                val plan = Rhythm.plan(
-                    parts = parts.size,
-                    userChars = t.length,
-                    hour = hour,
-                    mood = mood
-                )
-                thinking = false
-                if (parts.isEmpty()) {
-                    turns = turns + Bubble(false, "……")
-                    ChatMemory.append(context, ChatTurn(false, "……", System.currentTimeMillis()))
-                } else {
-                    delay(plan.firstDelayMs)
-                    parts.take(plan.bubbles.coerceAtLeast(1)).forEachIndexed { index, part ->
-                        if (index > 0) delay(plan.gapMs)
-                        turns = turns + Bubble(
-                            false,
-                            part,
-                            if (index == parts.lastIndex) picked else emptyList()
-                        )
-                        ChatMemory.append(context, ChatTurn(false, part, System.currentTimeMillis()))
-                        listState.animateScrollToItem(turns.size)
-                    }
+        // 她还在回上一条时先攒着，回完再一口气补上——但绝不会不回
+        if (busy) return
+
+        batchJob?.cancel()
+        batchJob = scope.launch {
+            // 等待窗口里也要让她显得"正在输入"——不然用户看到的是"已读不回"
+            busy = true
+            thinking = true
+            try {
+                delay(ReplyGate.waitMs(pending))
+                while (pending.isNotEmpty()) {
+                    val merged = ReplyGate.merge(pending)
+                    val since = pendingSinceLast
+                    pending = emptyList()
+                    pendingSinceLast = null
+                    respond(merged, since)
                 }
-            } else {
-                val localFallback = Bubble(
-                    false,
-                    local.text + "\n\n（刚才没连上模型，这是本地规则给的）",
-                    local.recommendations.map { it.action }
-                )
-                turns = turns + localFallback
-                ChatMemory.append(context, ChatTurn(false, localFallback.text, System.currentTimeMillis()))
+                // 网络异常之类的意外不能让对话卡死：兜底再回一句
+            } catch (e: Exception) {
+                if (pending.isNotEmpty()) {
+                    val merged = ReplyGate.merge(pending)
+                    pending = emptyList()
+                    val line = Persona.offlineLine(mood)
+                    turns = turns + Bubble(false, line)
+                    ChatMemory.append(context, ChatTurn(false, line, System.currentTimeMillis()))
+                }
+            } finally {
+                busy = false
                 thinking = false
-                listState.animateScrollToItem(turns.size)
             }
         }
     }
@@ -357,7 +405,7 @@ fun ChatScreen(
             item {
                 if (thinking) {
                     Text(
-                        "正在想…",
+                        "正在输入…",
                         color = CDim,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)

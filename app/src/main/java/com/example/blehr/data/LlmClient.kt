@@ -112,7 +112,8 @@ object LlmClient {
                 totalRecords = chat.totalRecords,
                 nickname = chat.nickname,
                 style = chat.style,
-                lite = !chat.fullInject
+                lite = !chat.fullInject,
+            minutesSinceLast = chat.minutesSinceLast
             ),
             user = Persona.user(text, pool, chat.hour, chat.band),
             history = chat.history

@@ -17,6 +17,8 @@ data class ChatContext(
     val nickname: String = "",
     /** 用户调过的说话方式（见 PersonaPreset）；空 = 用默认 */
     val style: String = "",
+    /** 距上一条消息多少分钟；null 表示没有上一条 */
+    val minutesSinceLast: Int? = null,
     /** true = 这次发完整人设；false = 只发一行提醒（注入节流，见 ChatMemory.needsFullInject） */
     val fullInject: Boolean = true,
     val history: List<ChatTurn> = emptyList()

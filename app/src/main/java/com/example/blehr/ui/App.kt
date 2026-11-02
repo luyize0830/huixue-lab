@@ -45,6 +45,7 @@ import androidx.health.connect.client.HealthConnectClient
 import com.example.blehr.ble.ScanHit
 import com.example.blehr.data.PersonaStore
 import com.example.blehr.data.ProfileRepo
+import com.example.blehr.data.ProfileStore
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -147,7 +148,7 @@ fun HuixueApp(
     // 第一次打开先认个脸；已经登录过的直接进首页（不打断已有用户）
     var loginEdit by remember { mutableStateOf(false) }
     var screen by remember {
-        mutableStateOf<Screen>(if (ProfileRepo.current.signedIn) Screen.Home else Screen.Login)
+        mutableStateOf<Screen>(if (ProfileRepo.current.signedIn || ProfileStore.seen(ctx)) Screen.Home else Screen.Login)
     }
 
     // 系统返回键：在子页面里回首页，而不是直接把 App 关掉（答辩现场最容易踩到）
@@ -418,11 +419,12 @@ fun HuixueApp(
             editMode = loginEdit,
             onDone = { n, s, m ->
                 ProfileRepo.save(ctx, n, s, m)
+                ProfileStore.markSeen(ctx)
                 loginEdit = false
                 screen = Screen.Home
                 onRequestNotifications()
             },
-            onSkip = { screen = Screen.Home },
+            onSkip = { ProfileStore.markSeen(ctx); screen = Screen.Home },
             onBack = if (loginEdit) ({ screen = Screen.Mine }) else null
         )
 

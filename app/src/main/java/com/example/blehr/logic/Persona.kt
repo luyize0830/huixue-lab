@@ -53,6 +53,8 @@ object Persona {
         totalRecords: Int,
         nickname: String = "",
         style: String = "",
+        /** 距离他上一条消息过了多少分钟；用来避免"秒回语气"（可以是 null） */
+        minutesSinceLast: Int? = null,
         /** 为 true 时只发一行提醒，不重复整份设定（注入节流，见下方说明） */
         lite: Boolean = false
     ): String {
@@ -86,6 +88,16 @@ object Persona {
         }
         val styleBlock = style.ifBlank { PersonaPreset.styleOf(PersonaPreset.DEFAULT_ID, null) }
 
+        // 时间感：真人回消息会先看一眼"这是多久以前发的"。
+        // 参考 qq-bridge 的 staleChatMinutes；但我们没有"太旧就不回"那一档 —— 一定要回，
+        // 只是语气必须对得上（过了很久还装作刚刚，比不回更假）。
+        val gapLine = when {
+            minutesSinceLast == null -> ""
+            minutesSinceLast >= 120 -> "他上一条是 ${minutesSinceLast / 60} 小时前发的，隔挺久了。可以带一句「这条我才看到」，但还是要回。"
+            minutesSinceLast >= 10 -> "他上一条是 ${minutesSinceLast} 分钟前发的，不算刚刚。别用「刚看到」「哈哈哈刚」这种实时语气。"
+            else -> ""
+        }
+
         // 注入节流：每一轮都把整份人设说明灌进去，模型会不停"表演设定"——
         // 每句话都在解释自己为什么这么说，反而更像客服。真人不需要每句都想起"我是谁"。
         // 所以只在开头/设定变更时给全量，其余轮次只给一行提醒。
@@ -94,6 +106,7 @@ object Persona {
                 你是「$NAME」。$timeWord。$moodLine
                 $memoryLine
                 $nameLine
+                $gapLine
                 设定不变，不用再自我介绍。像发微信一样回他：一到两条，每条十几个字，不总结、不列点。
                 只输出 JSON：{"reply":"第一条||第二条","actionIds":[]}
             """.trimIndent()
@@ -106,6 +119,7 @@ object Persona {
             $memoryLine
             $progressLine
             $nameLine
+            $gapLine
 
             【怎么说话 —— 这段最重要】
             $styleBlock
@@ -142,7 +156,7 @@ object Persona {
             只输出这一段 JSON，不要别的文字：
             {"reply":"第一条||第二条","actionIds":["行动id"],"minutes":10}
             没在让他做事的时候，actionIds 给空数组 []。
-            reply 里用 || 分隔你的每一条消息，最多三条；不想说话就给 "……"。
+            reply 里用 || 分隔你的每一条消息，最多三条。**不能不回**：哪怕只回两个字（「嗯」「啊？」），也要回。
         """.trimIndent()
     }
 
