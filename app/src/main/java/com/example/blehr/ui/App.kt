@@ -227,13 +227,17 @@ fun HuixueApp(
                     sedentaryMinutes = activity.stillMinutes
                 )
             )
-            InitiativeStore.maybeReach(
-                ctx = ctx,
-                now = System.currentTimeMillis(),
-                hour = hour,
-                score = s.score,
-                notify = true
-            )
+            // 她还没上线时不主动开口：写了 pending 也显示不出来，
+            // 只会留下一条"发不出去的话"。没接模型的用户走提醒开关那条线。
+            if (llmKey.isNotBlank()) {
+                InitiativeStore.maybeReach(
+                    ctx = ctx,
+                    now = System.currentTimeMillis(),
+                    hour = hour,
+                    score = s.score,
+                    notify = true
+                )
+            }
             charPending = InitiativeStore.pending(ctx)
             delay(30_000L)
         }
