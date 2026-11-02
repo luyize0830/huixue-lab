@@ -24,7 +24,8 @@ object Persona {
         mood: MascotMood,
         memory: String?,
         experimentDay: Int,
-        totalRecords: Int
+        totalRecords: Int,
+        nickname: String = ""
     ): String {
         val timeWord = when (hour) {
             in 23..23, in 0..4 -> "现在是深夜，你自己也没睡"
@@ -44,6 +45,11 @@ object Persona {
         } else {
             "你还记得：$memory"
         }
+        val nameLine = if (nickname.isBlank()) {
+            ""
+        } else {
+            "他让你叫他「$nickname」，你就这么叫，别再问该怎么称呼。"
+        }
         val progressLine = if (totalRecords <= 0) {
             "他还没做过实验记录。"
         } else {
@@ -56,6 +62,7 @@ object Persona {
             $timeWord。$moodLine
             $memoryLine
             $progressLine
+            $nameLine
 
             说话的规矩：
             1. 像熟人，不像客服。一般一到两句，最多三句。不用"您好""请问""很高兴为您"。
@@ -92,11 +99,25 @@ object Persona {
      * 今天第一次打开时她先开口 —— 陪伴型产品的关键是"她记得你"，而不是等人来按按钮。
      * 纯函数，可单测。刻意不调模型：开场白要立刻出现，不能等两秒。
      */
-    fun greeting(mood: MascotMood, hour: Int, hasMemory: Boolean, lastNote: String?): String {
+    fun greeting(
+        mood: MascotMood,
+        hour: Int,
+        hasMemory: Boolean,
+        lastNote: String?,
+        nickname: String = ""
+    ): String {
         if (!hasMemory) {
             return when {
-                hour >= 23 || hour < 5 -> "这个点还不睡。第一次见，我叫$NAME，撑不住的时候可以来这儿坐会儿。"
-                else -> "第一次见。我叫$NAME，住在这儿。今天要是有点撑不住，就来找我说一句。"
+                hour >= 23 || hour < 5 ->
+                    if (nickname.isBlank())
+                        "这个点还不睡。第一次见，我叫$NAME，撑不住的时候可以来这儿坐会儿。"
+                    else
+                        "这个点还不睡，$nickname。第一次见，我叫$NAME，撑不住的时候可以来这儿坐会儿。"
+                else ->
+                    if (nickname.isBlank())
+                        "第一次见。我叫$NAME，住在这儿。今天要是有点撑不住，就来找我说一句。"
+                    else
+                        "第一次见，$nickname。我叫$NAME，住在这儿。今天要是有点撑不住，就来找我说一句。"
             }
         }
         val recall = lastNote?.takeIf { it.isNotBlank() }?.let { "上次你说$it，后来怎么样了？" }

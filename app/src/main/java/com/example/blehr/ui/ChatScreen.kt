@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import com.example.blehr.data.ChatMemory
 import com.example.blehr.data.LlmClient
 import com.example.blehr.data.LlmConfig
+import com.example.blehr.data.ProfileRepo
 import com.example.blehr.logic.ChatAdvisor
 import com.example.blehr.logic.ChatContext
 import com.example.blehr.logic.ChatTurn
@@ -120,7 +121,7 @@ fun ChatScreen(
         val greeting = if (firstToday) {
             Bubble(
                 fromUser = false,
-                text = Persona.greeting(mood, hour, hasMemory, note)
+                text = Persona.greeting(mood, hour, hasMemory, note, ProfileRepo.current.nickname)
             )
         } else {
             null
@@ -171,6 +172,7 @@ fun ChatScreen(
                 memory = ChatMemory.note(context),
                 experimentDay = experimentDay,
                 totalRecords = records.size,
+                nickname = ProfileRepo.current.nickname,
                 history = ChatMemory.load(context).dropLast(1)
             )
             val suggestion = LlmClient.ask(context, t, pool, chat)

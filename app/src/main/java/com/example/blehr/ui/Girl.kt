@@ -85,16 +85,37 @@ private fun DrawScope.drawGirl(s: Float, mood: MascotMood, bob: Float) {
     val cx = s * 0.5f
     val cy = s * 0.52f + bob
 
-    // ---- 后面的长发 ----
+    // ---- 后面的长发（头顶那一坨，双马尾另画）----
     val back = Path().apply {
-        moveTo(s * 0.20f, s * 0.26f)
-        cubicTo(s * 0.20f, s * 0.06f, s * 0.80f, s * 0.06f, s * 0.80f, s * 0.26f)
-        cubicTo(s * 0.88f, s * 0.52f, s * 0.84f, s * 0.78f, s * 0.74f, s * 0.94f)
-        lineTo(s * 0.26f, s * 0.94f)
-        cubicTo(s * 0.16f, s * 0.78f, s * 0.12f, s * 0.52f, s * 0.20f, s * 0.26f)
+        moveTo(s * 0.235f, s * 0.40f)
+        cubicTo(s * 0.21f, s * 0.10f, s * 0.79f, s * 0.10f, s * 0.765f, s * 0.40f)
+        cubicTo(s * 0.80f, s * 0.54f, s * 0.78f, s * 0.62f, s * 0.74f, s * 0.66f)
+        lineTo(s * 0.26f, s * 0.66f)
+        cubicTo(s * 0.22f, s * 0.62f, s * 0.20f, s * 0.54f, s * 0.235f, s * 0.40f)
         close()
     }
     drawPath(back, HairDark)
+
+    // ---- 双马尾：比"齐刘海长到腰"更像她那种懒散的样子 ----
+    val tailL = Path().apply {
+        moveTo(s * 0.258f, s * 0.31f)
+        cubicTo(s * 0.132f, s * 0.35f, s * 0.100f, s * 0.60f, s * 0.112f, s * 0.84f)
+        cubicTo(s * 0.117f, s * 0.925f, s * 0.163f, s * 0.955f, s * 0.183f, s * 0.885f)
+        cubicTo(s * 0.176f, s * 0.72f, s * 0.205f, s * 0.52f, s * 0.302f, s * 0.38f)
+        close()
+    }
+    drawPath(tailL, HairDark)
+    val tailR = Path().apply {
+        moveTo(s * 0.742f, s * 0.31f)
+        cubicTo(s * 0.868f, s * 0.35f, s * 0.900f, s * 0.60f, s * 0.888f, s * 0.84f)
+        cubicTo(s * 0.883f, s * 0.925f, s * 0.837f, s * 0.955f, s * 0.817f, s * 0.885f)
+        cubicTo(s * 0.824f, s * 0.72f, s * 0.795f, s * 0.52f, s * 0.698f, s * 0.38f)
+        close()
+    }
+    drawPath(tailR, HairDark)
+    // 马尾根部的小发圈
+    drawCircle(BowBlue, radius = s * 0.028f, center = Offset(s * 0.262f, s * 0.322f))
+    drawCircle(BowBlue, radius = s * 0.028f, center = Offset(s * 0.738f, s * 0.322f))
 
     // ---- 脖子与领口 ----
     drawRoundRect(

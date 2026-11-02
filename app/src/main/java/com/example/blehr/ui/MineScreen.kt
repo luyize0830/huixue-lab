@@ -53,6 +53,7 @@ import com.example.blehr.logic.HrvMath
 fun MineScreen(
     profile: Profile,
     onSaveProfile: (String, String, String) -> Unit,
+    onOpenLogin: () -> Unit,
     onSignOut: () -> Unit,
     heartRate: Int?,
     connectedName: String?,
@@ -78,7 +79,6 @@ fun MineScreen(
     onClearRecords: () -> Unit,
     versionText: String
 ) {
-    var editing by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
     var editingKey by remember { mutableStateOf(false) }
 
@@ -137,7 +137,7 @@ fun MineScreen(
                 Modifier
                     .clip(RoundedCornerShape(10.dp))
                     .background(Look.Accent.copy(alpha = 0.10f))
-                    .clickable { editing = true }
+                    .clickable { onOpenLogin() }
                     .padding(horizontal = 12.dp, vertical = 7.dp)
             ) {
                 Text(
@@ -371,17 +371,6 @@ fun MineScreen(
         Spacer(Modifier.height(40.dp))
     }
 
-    if (editing) {
-        ProfileDialog(
-            profile = profile,
-            onDismiss = { editing = false },
-            onSave = { n, s, m ->
-                onSaveProfile(n, s, m)
-                editing = false
-            }
-        )
-    }
-
     if (confirmClear) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
@@ -518,81 +507,4 @@ private fun EntryCard(
             Text(chipText, fontSize = 12.sp, color = chipColor, fontWeight = FontWeight.Medium)
         }
     }
-}
-
-@Composable
-private fun ProfileDialog(
-    profile: Profile,
-    onDismiss: () -> Unit,
-    onSave: (String, String, String) -> Unit
-) {
-    var nickname by remember { mutableStateOf(profile.nickname) }
-    var school by remember { mutableStateOf(profile.school) }
-    var major by remember { mutableStateOf(profile.major) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (profile.signedIn) "编辑资料" else "登录（本地）", color = Look.Ink) },
-        text = {
-            Column {
-                Text(
-                    "不用密码，也不会传出去。写个称呼，记录就有归属了。",
-                    fontSize = 12.sp, color = Look.InkSoft
-                )
-                Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = nickname,
-                    onValueChange = { nickname = it },
-                    label = { Text("昵称") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Look.Accent,
-                        unfocusedBorderColor = Look.Hair,
-                        focusedLabelColor = Look.Accent,
-                        cursorColor = Look.Accent
-                    )
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = school,
-                    onValueChange = { school = it },
-                    label = { Text("学校（可空）") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Look.Accent,
-                        unfocusedBorderColor = Look.Hair,
-                        focusedLabelColor = Look.Accent,
-                        cursorColor = Look.Accent
-                    )
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = major,
-                    onValueChange = { major = it },
-                    label = { Text("专业（可空）") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Look.Accent,
-                        unfocusedBorderColor = Look.Hair,
-                        focusedLabelColor = Look.Accent,
-                        cursorColor = Look.Accent
-                    )
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { if (nickname.isNotBlank()) onSave(nickname, school, major) },
-                enabled = nickname.isNotBlank()
-            ) { Text(if (profile.signedIn) "保存" else "进入", color = Look.Accent) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消", color = Look.InkSoft) }
-        },
-        containerColor = Look.Card
-    )
 }

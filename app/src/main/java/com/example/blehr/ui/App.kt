@@ -121,6 +121,7 @@ sealed class Screen {
     object Mine : Screen()
     object Report : Screen()
     object ModelSetup : Screen()
+    object Login : Screen()
 }
 
 @Composable
@@ -136,23 +137,29 @@ fun HuixueApp(
     onStopScan: () -> Unit,
     onPickDevice: (ScanHit) -> Unit,
     onDisconnect: () -> Unit,
-    onRequestActivity: () -> Unit
+    onRequestActivity: () -> Unit,
+    onRequestNotifications: () -> Unit
 ) {
-    var screen by remember { mutableStateOf<Screen>(Screen.Home) }
+    val ctx = LocalContext.current
+
+    // 第一次打开先认个脸；已经登录过的直接进首页（不打断已有用户）
+    var loginEdit by remember { mutableStateOf(false) }
+    var screen by remember {
+        mutableStateOf<Screen>(if (ProfileRepo.current.signedIn) Screen.Home else Screen.Login)
+    }
 
     // 系统返回键：在子页面里回首页，而不是直接把 App 关掉（答辩现场最容易踩到）
     BackHandler(enabled = screen != Screen.Home) {
         screen = when (screen) {
             is Screen.Scan -> Screen.Mine
-                is Screen.Report -> Screen.Mine
+            is Screen.Report -> Screen.Mine
             is Screen.Detail -> Screen.Pool
             is Screen.Join -> Screen.Mine
-                is Screen.ModelSetup -> Screen.Home
-                else -> Screen.Home
+            is Screen.ModelSetup -> Screen.Home
+            is Screen.Login -> if (loginEdit) Screen.Mine else Screen.Home
+            else -> Screen.Home
         }
     }
-
-    val ctx = LocalContext.current
     val usage = UsageRepo.snapshot
     val activity = ActivityTracker.snapshot
     val wearable = HealthRepo.snapshot
@@ -292,7 +299,8 @@ fun HuixueApp(
                     onRequestHealth = requestHealth,
                     showChar = true,
                     charConnected = llmKey.isNotBlank(),
-                    onOpenSetup = { screen = Screen.ModelSetup }
+                    onOpenSetup = { screen = Screen.ModelSetup },
+                    nickname = ProfileRepo.current.nickname
                 )
 
                 is Screen.Recommend -> RecommendScreen(
@@ -346,6 +354,7 @@ fun HuixueApp(
                 is Screen.Mine -> MineScreen(
                     profile = ProfileRepo.current,
                     onSaveProfile = { n, s, m -> ProfileRepo.save(ctx, n, s, m) },
+            onOpenLogin = { loginEdit = true; screen = Screen.Login },
                     onSignOut = { ProfileRepo.signOut(ctx) },
                     heartRate = heartRate,
                     connectedName = connectedName,
@@ -387,7 +396,20 @@ fun HuixueApp(
                     onBack = { screen = Screen.Mine }
                 )
 
-                is Screen.ModelSetup -> ModelSetupScreen(
+                is Screen.Login -> LoginScreen(
+            initial = ProfileRepo.current,
+            editMode = loginEdit,
+            onDone = { n, s, m ->
+                ProfileRepo.save(ctx, n, s, m)
+                loginEdit = false
+                screen = Screen.Home
+                onRequestNotifications()
+            },
+            onSkip = { screen = Screen.Home },
+            onBack = if (loginEdit) ({ screen = Screen.Mine }) else null
+        )
+
+        is Screen.ModelSetup -> ModelSetupScreen(
                     onBack = { screen = Screen.Home },
                     onSaved = {
                         llmKey = LlmConfig.apiKey(ctx)
@@ -455,14 +477,15 @@ private fun CharCard(
     lowState: Boolean,
     note: String?,
     connected: Boolean,
-    onOpenSetup: () -> Unit
+    onOpenSetup: () -> Unit,
+    nickname: String
 ) {
     val line = when {
-        !connected -> "我还没上线。把你自己的 API Key 接给我，我就住在这台手机里。"
+        !connected -> if (nickname.isBlank()) "我还没上线。把你自己的 API Key 接给我，我就住在这台手机里。" else "我还没上线，$nickname。把你自己的 API Key 接给我，我就住在这台手机里。"
         lowState -> "你今天绷得有点久。别硬扛，跟我说一句，五分钟的事我来挑。"
         mood == MascotMood.HAPPY -> "状态不错嘛。趁这会儿把费脑子的活儿干一点？"
         !note.isNullOrBlank() -> "上次你说$note，后来怎么样了？"
-        else -> "我在。累的时候叫我一声，五分钟以内的事我都能安排。"
+        else -> if (nickname.isBlank()) "我在。累的时候叫我一声，五分钟以内的事我都能安排。" else "我在，$nickname。累的时候叫我一声，五分钟以内的事我都能安排。"
     }
     val cta = when {
         !connected -> "接入我的模型"
@@ -629,6 +652,7 @@ private fun HomeScreen(
     wearable: WearableSnapshot,
     onRequestHealth: () -> Unit,
     showChar: Boolean,
+    nickname: String,
     charConnected: Boolean,
     onOpenSetup: () -> Unit
 ) {
@@ -752,7 +776,8 @@ private fun HomeScreen(
                 lowState = charWorried,
                 note = ChatMemory.note(androidx.compose.ui.platform.LocalContext.current),
                 connected = charConnected,
-                onOpenSetup = onOpenSetup
+                onOpenSetup = onOpenSetup,
+                nickname = nickname
             )
         }
 

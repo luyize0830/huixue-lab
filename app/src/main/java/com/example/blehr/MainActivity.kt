@@ -78,7 +78,11 @@ class MainActivity : ComponentActivity() {
         ActivityTracker.start(this)
 
         // 通知权限：Android 13+ 才需要单独申请，拒绝也能用（只是不发主动提醒）
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !Reminders.canPost(this)) {
+        // 第一次打开的人先看到认脸页，等她上线之后再问 —— 别让系统弹窗盖在人设页上
+        if (ProfileRepo.current.signedIn &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !Reminders.canPost(this)
+        ) {
             notifLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         }
 
@@ -120,6 +124,11 @@ class MainActivity : ComponentActivity() {
                 onRequestActivity = {
                     if (ActivityTracker.hasPermission(this)) ActivityTracker.start(this)
                     else activityLauncher.launch(ActivityTracker.PERMISSION)
+                },
+                onRequestNotifications = {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !Reminders.canPost(this)) {
+                        notifLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    }
                 }
             )
         }

@@ -14,5 +14,6 @@ data class ChatContext(
     val memory: String? = null,
     val experimentDay: Int = 1,
     val totalRecords: Int = 0,
+    val nickname: String = "",
     val history: List<ChatTurn> = emptyList()
 )
