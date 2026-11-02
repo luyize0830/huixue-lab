@@ -56,6 +56,7 @@ import com.example.blehr.data.ProfileRepo
 import com.example.blehr.logic.ChatAdvisor
 import com.example.blehr.logic.ChatContext
 import com.example.blehr.logic.ChatTurn
+import com.example.blehr.logic.Humanizer
 import com.example.blehr.logic.IntentParser
 import com.example.blehr.logic.LlmReplyParser
 import com.example.blehr.logic.MascotMood
@@ -64,6 +65,7 @@ import com.example.blehr.logic.Persona
 import com.example.blehr.model.ActionItem
 import com.example.blehr.model.EnergyBand
 import com.example.blehr.model.ExperimentRecord
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private val CBg = Look.Paper
@@ -171,7 +173,13 @@ fun ChatScreen(
                 hour = hour,
                 band = band,
                 mood = mood,
-                memory = ChatMemory.note(context),
+                // 记"他最近具体说过的三句话"，比记一句抽象的情绪标签有用得多：
+                // 真人接话靠的是细节（你昨天说的那只猫），不是结论（你最近压力大）。
+                memory = ChatMemory.load(context)
+                    .filter { it.fromUser }
+                    .takeLast(3)
+                    .joinToString("；") { it.text.take(20) }
+                    .ifBlank { ChatMemory.note(context) },
                 experimentDay = experimentDay,
                 totalRecords = records.size,
                 nickname = ProfileRepo.current.nickname,
@@ -180,20 +188,37 @@ fun ChatScreen(
             )
             val suggestion = LlmClient.ask(context, t, pool, chat)
             val picked = suggestion?.let { LlmReplyParser.pick(pool, it.actionIds) }.orEmpty()
-            val reply = if (suggestion != null) {
-                // 模型有时会给出 0 个行动（纯聊天），这时照它说的显示，不摆卡片
-                Bubble(false, suggestion.reply, picked)
+            if (suggestion != null) {
+                // 模型按约定用 || 分隔每条消息；Humanizer 再兜一层拆句与去客服腔。
+                // 一条一条蹦出来，而不是一大段——这是"像真人"最直接的一半。
+                val parts = Humanizer.split(suggestion.reply)
+                thinking = false
+                if (parts.isEmpty()) {
+                    turns = turns + Bubble(false, "……")
+                    ChatMemory.append(context, ChatTurn(false, "……", System.currentTimeMillis()))
+                } else {
+                    parts.forEachIndexed { index, part ->
+                        if (index > 0) delay(900L) else delay(400L)
+                        turns = turns + Bubble(
+                            false,
+                            part,
+                            if (index == parts.lastIndex) picked else emptyList()
+                        )
+                        ChatMemory.append(context, ChatTurn(false, part, System.currentTimeMillis()))
+                        listState.animateScrollToItem(turns.size)
+                    }
+                }
             } else {
-                Bubble(
+                val localFallback = Bubble(
                     false,
                     local.text + "\n\n（刚才没连上模型，这是本地规则给的）",
                     local.recommendations.map { it.action }
                 )
+                turns = turns + localFallback
+                ChatMemory.append(context, ChatTurn(false, localFallback.text, System.currentTimeMillis()))
+                thinking = false
+                listState.animateScrollToItem(turns.size)
             }
-            turns = turns + reply
-            ChatMemory.append(context, ChatTurn(false, reply.text, System.currentTimeMillis()))
-            thinking = false
-            listState.animateScrollToItem(turns.size)
         }
     }
 
