@@ -78,6 +78,10 @@ import com.example.blehr.data.UsageRepo
 import com.example.blehr.data.WearableSnapshot
 import com.example.blehr.logic.Recommender
 import com.example.blehr.logic.RecommendationConstraints
+import com.example.blehr.logic.MascotMood
+import com.example.blehr.logic.MoodRule
+import com.example.blehr.logic.Persona
+import com.example.blehr.data.ChatMemory
 import com.example.blehr.logic.StateEngine
 import com.example.blehr.logic.NudgePlanner
 import com.example.blehr.logic.Pairing
@@ -284,7 +288,7 @@ fun HuixueApp(
                     onOpenChat = { screen = Screen.Chat },
                     wearable = wearable,
                     onRequestHealth = requestHealth,
-                    showFish = llmKey.isNotBlank()
+                    showChar = llmKey.isNotBlank()
                 )
 
                 is Screen.Recommend -> RecommendScreen(
@@ -301,6 +305,7 @@ fun HuixueApp(
                     pool = Repo.pool,
                     records = Repo.records,
                     hour = hour,
+                    mood = MoodRule.of(assessment.score),
                     onPick = { action -> screen = Screen.Timer(action) },
                     onBack = { screen = Screen.Home }
                 )
@@ -425,19 +430,20 @@ fun HuixueApp(
 // ---------------- 通用小组件 ----------------
 
 /**
- * 大肥鱼卡片。
+ * 角色卡。
  *
  * 只在用户接了自己的 API 之后出现 —— 不是因为技术上必须，
- * 而是想让它成为"这条鱼是你请回来的"这件事的可见奖励。
+ * 而是想让它成为"这个人是你的 API 请回来的"这件事的可见奖励。
  */
 @Composable
-private fun FishCard(mood: FishMood, onOpenChat: () -> Unit, lowState: Boolean) {
+private fun CharCard(mood: MascotMood, onOpenChat: () -> Unit, lowState: Boolean, note: String?) {
     val line = when {
-        lowState -> "我有点担心你。今天绷得有点久了，让我用五分钟把你捞回来？"
-        mood == FishMood.HAPPY -> "状态挺好的呀，今天适合干点费脑子的活。"
+        lowState -> "你今天绷得有点久。别硬扛，跟我说一句，五分钟的事我来挑。"
+        mood == MascotMood.HAPPY -> "状态不错嘛。趁这会儿把费脑子的活儿干一点？"
+        !note.isNullOrBlank() -> "上次你说$note，后来怎么样了？"
         else -> "我在。累的时候叫我一声，五分钟以内的事我都能安排。"
     }
-    val cta = if (lowState) "让它挑一个" else "跟它说两句"
+    val cta = if (lowState) "让她挑一个" else "跟她说两句"
 
     Row(
         Modifier
@@ -448,10 +454,14 @@ private fun FishCard(mood: FishMood, onOpenChat: () -> Unit, lowState: Boolean) 
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        FishMascot(mood = mood, size = 76.dp)
+        GirlMascot(mood = mood, size = 76.dp)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text("大肥鱼", fontSize = 11.sp, color = Look.InkFaint, letterSpacing = 0.6.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(Persona.NAME, fontSize = 11.sp, color = Look.InkFaint, letterSpacing = 0.6.sp)
+                Spacer(Modifier.width(6.dp))
+                Text(MoodRule.label(mood), fontSize = 10.sp, color = Look.SeaDeep.copy(alpha = 0.8f))
+            }
             Spacer(Modifier.height(5.dp))
             Text(line, fontSize = 13.sp, color = Look.Ink, lineHeight = 20.sp)
             Spacer(Modifier.height(8.dp))
@@ -588,11 +598,11 @@ private fun HomeScreen(
     onOpenChat: () -> Unit,
     wearable: WearableSnapshot,
     onRequestHealth: () -> Unit,
-    showFish: Boolean
+    showChar: Boolean
 ) {
     var showReasons by remember { mutableStateOf(false) }
-    val fishMood = FishMoodRule.of(assessment.score)
-    val fishWorried = fishMood == FishMood.WORRIED
+    val charMood = MoodRule.of(assessment.score)
+    val charWorried = charMood == MascotMood.WORRIED
 
     Column(
         Modifier
@@ -701,10 +711,15 @@ private fun HomeScreen(
             Text("说不清也行，说一句就好", fontSize = 14.sp, color = Look.Accent)
         }
 
-        // ---- 大肥鱼（接了自己的 API 才游出来）----
-        if (showFish) {
+        // ---- 小夜（接了自己的 API 才会出现）----
+        if (showChar) {
             Spacer(Modifier.height(14.dp))
-            FishCard(mood = fishMood, onOpenChat = onOpenChat, lowState = fishWorried)
+            CharCard(
+                mood = charMood,
+                onOpenChat = onOpenChat,
+                lowState = charWorried,
+                note = ChatMemory.note(androidx.compose.ui.platform.LocalContext.current)
+            )
         }
 
         Spacer(Modifier.height(18.dp))

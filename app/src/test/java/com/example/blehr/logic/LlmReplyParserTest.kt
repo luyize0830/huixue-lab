@@ -56,13 +56,23 @@ class LlmReplyParserTest {
     }
 
     @Test
-    fun `缺 reply 或 actionIds 一律返回 null`() {
+    fun `缺 reply 返回 null，缺 actionIds 当成没有行动`() {
         assertNull(LlmReplyParser.parse("""{"actionIds":["walk"]}"""))
-        assertNull(LlmReplyParser.parse("""{"reply":"试试"}"""))
         assertNull(LlmReplyParser.parse("""{"reply":"","actionIds":["walk"]}"""))
         assertNull(LlmReplyParser.parse("完全不是 JSON"))
         assertNull(LlmReplyParser.parse(""))
         assertNull(LlmReplyParser.parse(null))
+
+        // v0.11：她可以只是聊两句，不摆卡片
+        val chat = LlmReplyParser.parse("""{"reply":"今天就这样吧，早点睡"}""")!!
+        assertEquals("今天就这样吧，早点睡", chat.reply)
+        assertTrue(chat.actionIds.isEmpty())
+    }
+
+    @Test
+    fun `空数组表示这次不推荐行动`() {
+        val s = LlmReplyParser.parse("""{"reply":"嗯，我在听","actionIds":[]}""")!!
+        assertTrue(s.actionIds.isEmpty())
     }
 
     @Test
@@ -103,7 +113,7 @@ class LlmReplyParserTest {
 
     @Test
     fun `提示词里带上时间和清单`() {
-        val u = LlmPrompt.user("有点累", pool, 23, com.example.blehr.model.EnergyBand.LOW)
+        val u = Persona.user("有点累", pool, 23, com.example.blehr.model.EnergyBand.LOW)
         assertTrue(u.contains("23 点"))
         assertTrue(u.contains("有点累"))
         assertTrue(u.contains("walk"))

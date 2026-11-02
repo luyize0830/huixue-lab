@@ -1,12 +1,13 @@
 package com.example.blehr.data
 
 import android.content.Context
+import com.example.blehr.logic.ChatContext
+import com.example.blehr.logic.ChatTurn
 import com.example.blehr.logic.JsonLite
-import com.example.blehr.logic.LlmPrompt
 import com.example.blehr.logic.LlmReplyParser
 import com.example.blehr.logic.LlmSuggestion
+import com.example.blehr.logic.Persona
 import com.example.blehr.model.ActionItem
-import com.example.blehr.model.EnergyBand
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
@@ -67,16 +68,22 @@ object LlmClient {
         ctx: Context,
         text: String,
         pool: List<ActionItem>,
-        hour: Int,
-        band: EnergyBand
+        chat: ChatContext
     ): LlmSuggestion? = withContext(Dispatchers.IO) {
         val key = LlmConfig.apiKey(ctx)
         if (key.isBlank()) return@withContext null
 
         val body = buildBody(
             model = LlmConfig.model(ctx),
-            system = LlmPrompt.system(),
-            user = LlmPrompt.user(text, pool, hour, band)
+            system = Persona.system(
+                hour = chat.hour,
+                mood = chat.mood,
+                memory = chat.memory,
+                experimentDay = chat.experimentDay,
+                totalRecords = chat.totalRecords
+            ),
+            user = Persona.user(text, pool, chat.hour, chat.band),
+            history = chat.history
         )
 
         runCatching {
@@ -102,13 +109,22 @@ object LlmClient {
         }.getOrNull()
     }
 
-    private fun buildBody(model: String, system: String, user: String): String {
+    private fun buildBody(
+        model: String,
+        system: String,
+        user: String,
+        history: List<ChatTurn>
+    ): String {
         val sb = StringBuilder()
         sb.append("{\"model\":").append(quote(model))
         sb.append(",\"messages\":[")
-        sb.append("{\"role\":\"system\",\"content\":").append(quote(system)).append("},")
-        sb.append("{\"role\":\"user\",\"content\":").append(quote(user)).append("}]")
-        sb.append(",\"temperature\":0.6,\"max_tokens\":400,\"stream\":false}")
+        sb.append("{\"role\":\"system\",\"content\":").append(quote(system)).append("}")
+        history.takeLast(6).forEach { t ->
+            sb.append(",{\"role\":").append(quote(if (t.fromUser) "user" else "assistant"))
+                .append(",\"content\":").append(quote(t.text)).append("}")
+        }
+        sb.append(",{\"role\":\"user\",\"content\":").append(quote(user)).append("}")
+        sb.append("],\"temperature\":0.8,\"max_tokens\":400,\"stream\":false}")
         return sb.toString()
     }
 

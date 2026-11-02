@@ -8,6 +8,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +35,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,14 +44,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.blehr.data.ChatMemory
 import com.example.blehr.data.LlmClient
 import com.example.blehr.data.LlmConfig
 import com.example.blehr.logic.ChatAdvisor
+import com.example.blehr.logic.ChatContext
+import com.example.blehr.logic.ChatTurn
 import com.example.blehr.logic.IntentParser
 import com.example.blehr.logic.LlmReplyParser
+import com.example.blehr.logic.MascotMood
+import com.example.blehr.logic.MoodRule
+import com.example.blehr.logic.Persona
 import com.example.blehr.model.ActionItem
 import com.example.blehr.model.EnergyBand
 import com.example.blehr.model.ExperimentRecord
@@ -61,17 +71,19 @@ private val CMint = Look.Olive
 private val CText = Look.Ink
 private val CDim = Look.InkSoft
 
-private data class ChatTurn(
+/** 界面上的一条气泡。actions 只对"角色推荐的行动"有用，历史记录回来时不带卡片。 */
+private data class Bubble(
     val fromUser: Boolean,
     val text: String,
     val actions: List<ActionItem> = emptyList()
 )
 
 /**
- * 对话式入口。
+ * 和「小夜」说话。
  *
- * 它是"AI 走出对话框"的反向用法：不是让用户去跟 AI 聊天，而是让用户用最省力的方式
- * 说清"我现在什么情况"，系统把它翻成结构化条件再落到具体行动上。
+ * 两个设计要点：
+ * 1. 她记得你。进来先接上历史，今天第一次打开她会自己先说一句（[ChatMemory] 存最近 40 轮）。
+ * 2. 她可以只是聊天。模型返回 actionIds 为空时不摆卡片 —— 上一版每条都硬塞三个按钮，很出戏。
  */
 @Composable
 fun ChatScreen(
@@ -79,59 +91,102 @@ fun ChatScreen(
     pool: List<ActionItem>,
     records: List<ExperimentRecord>,
     hour: Int,
+    mood: MascotMood,
     onPick: (ActionItem) -> Unit,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
     var input by remember { mutableStateOf("") }
-    var turns by remember {
-        mutableStateOf(
-            listOf(
-                ChatTurn(
-                    fromUser = false,
-                    text = "说一句你现在的情况就行，比如「在图书馆，还有一小时，有点撑不住」。\n" +
-                        "我会按你的时间、地点和状态挑几个五分钟内能做完的事。"
-                )
-            )
-        )
-    }
+    var turns by remember { mutableStateOf(listOf<Bubble>()) }
+    var loaded by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    val context = androidx.compose.ui.platform.LocalContext.current
     var voiceError by remember { mutableStateOf<String?>(null) }
     var thinking by remember { mutableStateOf(false) }
+
+    val experimentDay = remember { ChatMemory.dayIndex(records.minOfOrNull { it.ts }, System.currentTimeMillis()) }
+
+    // 进界面先接记忆；今天第一次来，她先开口
+    LaunchedEffect(Unit) {
+        if (loaded) return@LaunchedEffect
+        loaded = true
+        val now = System.currentTimeMillis()
+        val history = ChatMemory.load(context)
+        val note = ChatMemory.note(context)
+        val hasMemory = history.isNotEmpty() || !note.isNullOrBlank()
+        val firstToday = ChatMemory.lastTalkDay(context) != ChatMemory.dayKey(now)
+
+        val restored = history.map { Bubble(it.fromUser, it.text) }
+        val greeting = if (firstToday) {
+            Bubble(
+                fromUser = false,
+                text = Persona.greeting(mood, hour, hasMemory, note)
+            )
+        } else {
+            null
+        }
+        val head = if (restored.isEmpty() && greeting == null) {
+            listOf(Bubble(false, "说一句你现在的情况就行。\n我会按你的时间、地点和状态挑几个五分钟内能做完的事。"))
+        } else {
+            restored
+        }
+        turns = head + listOfNotNull(greeting)
+
+        if (firstToday) {
+            ChatMemory.append(context, ChatTurn(false, greeting!!.text, now))
+            ChatMemory.markTalked(context, now)
+        }
+        scope.launch { listState.animateScrollToItem((turns.size - 1).coerceAtLeast(0)) }
+    }
 
     fun send(text: String) {
         val t = text.trim()
         if (t.isEmpty() || thinking) return
 
-        // 先把用户这句挂上去，后面不管走模型还是本地规则，界面都已经有反馈
-        turns = turns + ChatTurn(true, t)
+        turns = turns + Bubble(true, t)
         input = ""
+        val now = System.currentTimeMillis()
+        ChatMemory.append(context, ChatTurn(true, t, now))
+        // 用这句当作"上次聊到"，她下次能接上；只存前 24 字，不存整段
+        ChatMemory.setNote(context, t.take(24))
+        ChatMemory.markTalked(context, now)
 
         val intent = IntentParser.parse(t, hour)
         val local = ChatAdvisor.reply(intent, band, pool, records)
 
         if (!LlmConfig.isReady(context)) {
-            turns = turns + ChatTurn(false, local.text, local.recommendations.map { it.action })
+            val aiText = Persona.offlineLine(mood)
+            turns = turns + Bubble(false, aiText, local.recommendations.map { it.action })
+            ChatMemory.append(context, ChatTurn(false, aiText, now))
             scope.launch { listState.animateScrollToItem(turns.size) }
             return
         }
 
         thinking = true
         scope.launch {
-            val suggestion = LlmClient.ask(context, t, pool, hour, band)
+            val chat = ChatContext(
+                hour = hour,
+                band = band,
+                mood = mood,
+                memory = ChatMemory.note(context),
+                experimentDay = experimentDay,
+                totalRecords = records.size,
+                history = ChatMemory.load(context).dropLast(1)
+            )
+            val suggestion = LlmClient.ask(context, t, pool, chat)
             val picked = suggestion?.let { LlmReplyParser.pick(pool, it.actionIds) }.orEmpty()
-            val turn = if (suggestion != null && picked.isNotEmpty()) {
-                ChatTurn(false, suggestion.reply, picked)
+            val reply = if (suggestion != null) {
+                // 模型有时会给出 0 个行动（纯聊天），这时照它说的显示，不摆卡片
+                Bubble(false, suggestion.reply, picked)
             } else {
-                // 模型不可用不是错误，只是降级：把"这是本地规则答的"直接告诉用户
-                ChatTurn(
+                Bubble(
                     false,
                     local.text + "\n\n（刚才没连上模型，这是本地规则给的）",
                     local.recommendations.map { it.action }
                 )
             }
-            turns = turns + turn
+            turns = turns + reply
+            ChatMemory.append(context, ChatTurn(false, reply.text, System.currentTimeMillis()))
             thinking = false
             listState.animateScrollToItem(turns.size)
         }
@@ -179,7 +234,10 @@ fun ChatScreen(
         ) {
             TextButton(onClick = onBack) { Text("← 返回", color = CDim) }
             Spacer(Modifier.weight(1f))
-            Text("说一句话", color = CText, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(Persona.NAME, color = CText, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                Text(MoodRule.label(mood), color = CDim, fontSize = 10.sp)
+            }
             Spacer(Modifier.weight(1f))
             Box(Modifier.width(64.dp))
         }
@@ -208,9 +266,9 @@ fun ChatScreen(
                 } else {
                     Column(Modifier.fillMaxWidth()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            FishMascot(mood = FishMood.IDLE, size = 22.dp, animated = false)
+                            GirlMascot(mood = mood, size = 26.dp, animated = false)
                             Spacer(Modifier.width(6.dp))
-                            Text("大肥鱼", fontSize = 10.sp, color = CDim)
+                            Text(Persona.NAME, fontSize = 10.sp, color = CDim)
                         }
                         Spacer(Modifier.height(5.dp))
                         Text(
@@ -221,7 +279,7 @@ fun ChatScreen(
                                 .background(CBubble, RoundedCornerShape(14.dp))
                                 .padding(horizontal = 14.dp, vertical = 12.dp),
                             fontSize = 14.sp,
-                            lineHeight = 20.sp
+                            lineHeight = 21.sp
                         )
                         if (turn.actions.isNotEmpty()) {
                             Spacer(Modifier.height(8.dp))
@@ -271,10 +329,11 @@ fun ChatScreen(
         Row(
             Modifier
                 .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            listOf("有点撑不住", "还剩十分钟", "在图书馆").forEach { quick ->
+            listOf("有点撑不住", "还剩十分钟", "在图书馆", "今天好累").forEach { quick ->
                 Text(
                     quick,
                     color = CDim,
