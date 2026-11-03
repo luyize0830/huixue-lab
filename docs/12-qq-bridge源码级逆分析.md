@@ -6,7 +6,7 @@
 >
 > 分析对象：`Derpyu520/qq-bridge` v0.2.1-r2（main 分支归档，2026-11-02 下载）
 > 规模：107 个 `.mjs` / 26 个 `.js`，`src/bridge.js` 单文件 **716.7 KB / 13020 行**。
-> 副本位置：`_rev\src\qq-bridge-main`
+> 副本位置：`C:\Users\34243\Desktop\软件大赛\_rev\src\qq-bridge-main`
 
 ## 0. 先说结论（三条结构性发现）
 
