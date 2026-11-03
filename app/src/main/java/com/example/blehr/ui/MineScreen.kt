@@ -72,6 +72,7 @@ fun MineScreen(
     onOpenJoin: () -> Unit,
     onOpenReport: () -> Unit,
     onOpenPersona: () -> Unit,
+    onOpenMusic: () -> Unit,
     voiceEnabled: Boolean,
     onToggleVoice: (Boolean) -> Unit,
     llmEnabled: Boolean,
@@ -335,6 +336,14 @@ fun MineScreen(
             chipText = if (voiceEnabled) "已打开" else "已关闭",
             chipColor = if (voiceEnabled) Look.Olive else Look.InkSoft,
             onClick = { onToggleVoice(!voiceEnabled) }
+        )
+        Spacer(Modifier.height(8.dp))
+        EntryCard(
+            title = "音乐",
+            subtitle = "三段本机合成的音景（离线、无版权），还能绑定你自己的音乐 App",
+            chipText = "打开",
+            chipColor = Look.Accent,
+            onClick = onOpenMusic
         )
 
         // ---- 记录 ----

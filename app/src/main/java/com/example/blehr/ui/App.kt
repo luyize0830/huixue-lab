@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -84,6 +85,12 @@ import com.example.blehr.logic.Recommender
 import com.example.blehr.logic.RecommendationConstraints
 import com.example.blehr.logic.MascotMood
 import com.example.blehr.logic.MoodRule
+import com.example.blehr.logic.MusicSuggestion
+import com.example.blehr.logic.StressBand
+import com.example.blehr.logic.StressEngine
+import com.example.blehr.logic.StressInput
+import com.example.blehr.logic.StressResult
+import com.example.blehr.data.MusicBinding
 import com.example.blehr.logic.Persona
 import com.example.blehr.data.ChatMemory
 import com.example.blehr.logic.StateEngine
@@ -127,6 +134,7 @@ sealed class Screen {
     object ModelSetup : Screen()
     object Login : Screen()
     object Persona : Screen()
+    object Music : Screen()
 }
 
 @Composable
@@ -149,6 +157,8 @@ fun HuixueApp(
 
     // 第一次打开先认个脸；已经登录过的直接进首页（不打断已有用户）
     var loginEdit by remember { mutableStateOf(false) }
+    // 音乐页可能从首页"压力"卡进来，也可能从「我的」进来；返回键回哪儿要看来源
+    var musicFromHome by remember { mutableStateOf(false) }
     var screen by remember {
         mutableStateOf<Screen>(if (ProfileRepo.current.signedIn || ProfileStore.seen(ctx)) Screen.Home else Screen.Login)
     }
@@ -163,6 +173,7 @@ fun HuixueApp(
             is Screen.ModelSetup -> Screen.Home
             is Screen.Login -> if (loginEdit) Screen.Mine else Screen.Home
             is Screen.Persona -> Screen.Mine
+            is Screen.Music -> if (musicFromHome) Screen.Home else Screen.Mine
             else -> Screen.Home
         }
     }
@@ -261,6 +272,28 @@ fun HuixueApp(
     )
     val assessment = StateEngine.assess(snapshot)
 
+    // 压力/情绪：有手环就靠 RMSSD，没有就只用行为线索，并在界面上如实标成"估的"
+    val stress = StressEngine.assess(
+        StressInput(
+            heartRate = heartRate,
+            restingHr = restingHr,
+            hrvRmssd = hrvRmssd,
+            focusMinutes = focusMinutes,
+            screenMinutesLastHour = screenMinutes,
+            hour = hour,
+            energyScore = assessment.score
+        )
+    )
+    val musicPlan = MusicSuggestion.plan(stress, hour)
+    // 她还没上线时不推音乐：推了也只是一句没人说的话
+    val musicSuggest = llmKey.isNotBlank() && MusicSuggestion.shouldSuggest(
+        stress = stress,
+        hour = hour,
+        screenMinutesLastHour = screenMinutes,
+        lastSuggestedAt = MusicBinding.lastSuggestedAt(ctx),
+        now = System.currentTimeMillis()
+    )
+
     // 决定"要不要主动说话"，并把文案预置好；真正的发送由系统闹钟触发的广播完成，
     // 这样用户不打开 App 时提醒也能按纪律发出去。
     LaunchedEffect(assessment.score, activity.stillMinutes, Repo.records.size) {
@@ -333,7 +366,10 @@ fun HuixueApp(
                     charConnected = llmKey.isNotBlank(),
                     onOpenSetup = { screen = Screen.ModelSetup },
                     nickname = ProfileRepo.current.nickname,
-                    charPending = charPending
+                    charPending = charPending,
+                    stress = stress,
+                    musicLine = if (musicSuggest) musicPlan.line else null,
+                    onOpenMusic = { musicFromHome = true; screen = Screen.Music }
                 )
 
                 is Screen.Recommend -> RecommendScreen(
@@ -398,11 +434,18 @@ fun HuixueApp(
                     onBack = { screen = Screen.Mine }
                 )
 
+                is Screen.Music -> MusicScreen(
+                    stress = stress,
+                    hour = hour,
+                    onBack = { screen = if (musicFromHome) Screen.Home else Screen.Mine }
+                )
+
                 is Screen.Mine -> MineScreen(
                     profile = ProfileRepo.current,
                     onSaveProfile = { n, s, m -> ProfileRepo.save(ctx, n, s, m) },
             onOpenLogin = { loginEdit = true; screen = Screen.Login },
                     onOpenPersona = { screen = Screen.Persona },
+                    onOpenMusic = { musicFromHome = false; screen = Screen.Music },
                     voiceEnabled = voiceOn,
                     onToggleVoice = { v ->
                         VoiceSettings.setEnabled(ctx, v)
@@ -533,12 +576,15 @@ private fun CharCard(
     connected: Boolean,
     onOpenSetup: () -> Unit,
     nickname: String,
-    pending: String? = null
+    pending: String? = null,
+    musicLine: String? = null,
+    onMusic: () -> Unit
 ) {
     // 她主动说的那句话优先显示：那是"她自己想说的"，不该被模板文案盖住
     val line = when {
         !connected -> if (nickname.isBlank()) "我还没上线。把你自己的 API Key 接给我，我就住在这台手机里。" else "我还没上线，$nickname。把你自己的 API Key 接给我，我就住在这台手机里。"
         !pending.isNullOrBlank() -> pending
+        !musicLine.isNullOrBlank() -> musicLine
         lowState -> "你今天绷得有点久。别硬扛，跟我说一句，五分钟的事我来挑。"
         mood == MascotMood.HAPPY -> "状态不错嘛。趁这会儿把费脑子的活儿干一点？"
         !note.isNullOrBlank() -> "上次你说$note，后来怎么样了？"
@@ -547,10 +593,16 @@ private fun CharCard(
     val cta = when {
         !connected -> "接入我的模型"
         !pending.isNullOrBlank() -> "回她一句"
+        !musicLine.isNullOrBlank() -> "听一会儿"
         lowState -> "让她挑一个"
         else -> "跟她说两句"
     }
-    val action = if (connected) onOpenChat else onOpenSetup
+    val action = when {
+        !connected -> onOpenSetup
+        !pending.isNullOrBlank() -> onOpenChat
+        !musicLine.isNullOrBlank() -> onMusic
+        else -> onOpenChat
+    }
 
     Row(
         Modifier
@@ -586,6 +638,70 @@ private fun CharCard(
         }
     }
 }
+/**
+ * 压力与情绪。写法上刻意比"精力余额"更保守：
+ * 标题带"推断"，没有生理数据时第一句就说清楚这是估的，依据全部摊开。
+ */
+@Composable
+private fun StressCard(stress: StressResult, onOpenMusic: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val tone = when (stress.band) {
+        StressBand.HIGH -> Rose
+        StressBand.MILD -> Amber
+        StressBand.CALM -> Mint
+        StressBand.UNKNOWN -> Look.InkFaint
+    }
+    Card(
+        Modifier
+            .fillMaxWidth()
+            .border(1.dp, Look.Hair, RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Look.Card)
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Glyph(GlyphKind.PULSE, size = 14.dp, tint = tone)
+                Spacer(Modifier.width(7.dp))
+                Text("压力与情绪 · 推断", fontSize = 12.sp, color = Look.InkFaint, letterSpacing = 0.3.sp)
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "${stress.band.label} · 看起来${stress.emotion.label}",
+                    fontSize = 12.sp, color = tone, fontWeight = FontWeight.Medium
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                if (stress.measuredPhysiology) {
+                    "这次有心率变异率参与，比只看作息准一些。"
+                } else {
+                    "没有手环的生理数据，这只是按作息和行为估的。"
+                },
+                fontSize = 11.5.sp, color = Look.InkFaint, lineHeight = 17.sp
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                if (open) "收起依据" else "看看依据",
+                fontSize = 11.5.sp, color = Look.Accent,
+                modifier = Modifier.clickable { open = !open }
+            )
+            if (open) {
+                Spacer(Modifier.height(6.dp))
+                stress.reasons.forEach {
+                    Text("· $it", fontSize = 12.sp, color = Look.InkSoft, lineHeight = 18.sp)
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onOpenMusic, contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp)) {
+                    Text("听点轻音乐 →", fontSize = 12.5.sp, color = Look.SeaDeep, fontWeight = FontWeight.Medium)
+                }
+                Spacer(Modifier.weight(1f))
+                Text("R-R 间期决定准不准", fontSize = 10.5.sp, color = Look.InkFaint)
+            }
+        }
+    }
+}
+
 @Composable
 private fun SectionCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Card(
@@ -712,6 +828,9 @@ private fun HomeScreen(
     showChar: Boolean,
     nickname: String,
     charPending: String? = null,
+    stress: StressResult,
+    musicLine: String? = null,
+    onOpenMusic: () -> Unit,
     charConnected: Boolean,
     onOpenSetup: () -> Unit
 ) {
@@ -798,6 +917,10 @@ private fun HomeScreen(
             }
         }
 
+        Spacer(Modifier.height(12.dp))
+
+        StressCard(stress = stress, onOpenMusic = onOpenMusic)
+
         Spacer(Modifier.height(14.dp))
 
         Button(
@@ -837,7 +960,9 @@ private fun HomeScreen(
                 connected = charConnected,
                 onOpenSetup = onOpenSetup,
                 nickname = nickname,
-                pending = charPending
+                pending = charPending,
+                musicLine = musicLine,
+                onMusic = onOpenMusic
             )
         }
 

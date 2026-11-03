@@ -67,7 +67,7 @@ object Look {
 
 /** 自己画的图标，24dp 网格，统一线宽。不引图标库，避免包体再涨一截。 */
 enum class GlyphKind {
-    POOL, CHART, PEOPLE, CHAT, PULSE, BELL, CLOCK, MIC, BOLT, SPEAKER
+    POOL, CHART, PEOPLE, CHAT, PULSE, BELL, CLOCK, MIC, BOLT, SPEAKER, PLAY, PAUSE
 }
 
 @Composable
@@ -230,6 +230,29 @@ private fun DrawScope.drawGlyph(kind: GlyphKind, s: Float, sw: Float, tint: Colo
                 topLeft = p(0.52f, 0.22f),
                 size = Size(0.38f * s, 0.56f * s),
                 style = Stroke(sw, cap = StrokeCap.Round)
+            )
+        }
+
+        // 播放：一个实心三角。用 Path 画、尖端略圆一点，不像素材库图标那么尖。
+        GlyphKind.PLAY -> {
+            val tri = Path().apply {
+                moveTo(0.32f * s, 0.16f * s)
+                lineTo(0.84f * s, 0.50f * s)
+                lineTo(0.32f * s, 0.84f * s)
+                close()
+            }
+            drawPath(tri, tint, style = Stroke(sw * 2.2f, join = StrokeJoin.Round, cap = StrokeCap.Round))
+        }
+
+        // 暂停：两根圆头竖条。
+        GlyphKind.PAUSE -> {
+            drawLine(
+                tint, p(0.36f, 0.18f), p(0.36f, 0.82f),
+                strokeWidth = sw * 2.4f, cap = StrokeCap.Round
+            )
+            drawLine(
+                tint, p(0.64f, 0.18f), p(0.64f, 0.82f),
+                strokeWidth = sw * 2.4f, cap = StrokeCap.Round
             )
         }
     }
