@@ -388,6 +388,7 @@ fun HuixueApp(
                     hour = hour,
                     mood = MoodRule.of(assessment.score),
                     onEditPersona = { screen = Screen.Persona },
+                    onOpenSetup = { screen = Screen.ModelSetup },
                     voiceEnabled = voiceOn,
                     onPick = { action -> screen = Screen.Timer(action) },
                     onBack = { screen = Screen.Home }

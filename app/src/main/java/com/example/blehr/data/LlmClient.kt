@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.blehr.logic.ChatContext
 import com.example.blehr.logic.ChatTurn
 import com.example.blehr.logic.JsonLite
+import com.example.blehr.logic.LlmErrors
 import com.example.blehr.logic.LlmReplyParser
 import com.example.blehr.logic.LlmSuggestion
 import com.example.blehr.logic.Persona
@@ -93,14 +94,45 @@ object LlmClient {
     private const val CONNECT_TIMEOUT_MS = 8_000
     private const val READ_TIMEOUT_MS = 15_000
 
-    suspend fun ask(
+    /** 一次对话的结果。失败时带上"为什么"，界面才有话可说。 */
+    sealed class LlmResult {
+        data class Ok(val suggestion: LlmSuggestion) : LlmResult()
+        data class Fail(val reason: String) : LlmResult()
+    }
+
+    private class HttpResponse(val code: Int, val raw: String)
+
+    private fun post(url: String, key: String, body: String): HttpResponse {
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            doOutput = true
+            connectTimeout = CONNECT_TIMEOUT_MS
+            readTimeout = READ_TIMEOUT_MS
+            setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            setRequestProperty("Authorization", "Bearer ${key.trim()}")
+        }
+        try {
+            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val raw = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+            return HttpResponse(code, raw)
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    /**
+     * 一次对话。失败不再返回 null —— 返回带原因的结果，
+     * 让界面能说"Key 失效"，而不是笼统的"没连上"。
+     */
+    suspend fun askOutcome(
         ctx: Context,
         text: String,
         pool: List<ActionItem>,
         chat: ChatContext
-    ): LlmSuggestion? = withContext(Dispatchers.IO) {
-        val key = LlmConfig.apiKey(ctx)
-        if (key.isBlank()) return@withContext null
+    ): LlmResult = withContext(Dispatchers.IO) {
+        if (!LlmConfig.isReady(ctx)) return@withContext LlmResult.Fail(LlmErrors.NOT_CONFIGURED)
 
         val body = buildBody(
             model = LlmConfig.model(ctx),
@@ -113,33 +145,36 @@ object LlmClient {
                 nickname = chat.nickname,
                 style = chat.style,
                 lite = !chat.fullInject,
-            minutesSinceLast = chat.minutesSinceLast
+                minutesSinceLast = chat.minutesSinceLast
             ),
             user = Persona.user(text, pool, chat.hour, chat.band),
             history = chat.history
         )
 
-        runCatching {
-            val conn = (URL(LlmConfig.endpoint(ctx)).openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                doOutput = true
-                connectTimeout = CONNECT_TIMEOUT_MS
-                readTimeout = READ_TIMEOUT_MS
-                setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                setRequestProperty("Authorization", "Bearer $key")
-            }
-            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+        val response = runCatching {
+            post(LlmConfig.endpoint(ctx), LlmConfig.apiKey(ctx), body)
+        }.getOrElse { e -> return@withContext LlmResult.Fail(LlmErrors.fromException(e)) }
 
-            val code = conn.responseCode
-            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-            val raw = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-            conn.disconnect()
-            if (code !in 200..299) return@runCatching null
+        if (response.code !in 200..299) {
+            return@withContext LlmResult.Fail(LlmErrors.hint(response.code))
+        }
 
-            // 先从响应里取 message.content，再解析里面那段 JSON
-            val content = JsonLite.readString(raw, "content")
-            LlmReplyParser.parse(content)
-        }.getOrNull()
+        // 先从响应里取 message.content，再解析里面那段 JSON
+        val content = JsonLite.readString(response.raw, "content")
+        val suggestion = LlmReplyParser.parse(content)
+            ?: return@withContext LlmResult.Fail(LlmErrors.BAD_REPLY)
+        LlmResult.Ok(suggestion)
+    }
+
+    /** 只要结果、不要原因的地方用这个。 */
+    suspend fun ask(
+        ctx: Context,
+        text: String,
+        pool: List<ActionItem>,
+        chat: ChatContext
+    ): LlmSuggestion? = when (val r = askOutcome(ctx, text, pool, chat)) {
+        is LlmResult.Ok -> r.suggestion
+        is LlmResult.Fail -> null
     }
 
     /**

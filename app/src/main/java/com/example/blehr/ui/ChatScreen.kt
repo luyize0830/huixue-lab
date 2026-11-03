@@ -60,6 +60,7 @@ import com.example.blehr.logic.ChatContext
 import com.example.blehr.logic.ChatTurn
 import com.example.blehr.logic.Humanizer
 import com.example.blehr.logic.IntentParser
+import com.example.blehr.logic.LlmErrors
 import com.example.blehr.logic.LlmReplyParser
 import com.example.blehr.logic.MascotMood
 import com.example.blehr.logic.MoodRule
@@ -103,6 +104,7 @@ fun ChatScreen(
     mood: MascotMood,
     onPick: (ActionItem) -> Unit,
     onEditPersona: () -> Unit,
+    onOpenSetup: () -> Unit,
     voiceEnabled: Boolean = false,
     onBack: () -> Unit
 ) {
@@ -114,6 +116,9 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     var voiceError by remember { mutableStateOf<String?>(null) }
     var thinking by remember { mutableStateOf(false) }
+    // 没接入模型时，输入框上方直接给一条能点的提示——
+    // 不然用户看到的永远是"没连上模型"这句话，却不知道是自己没填 Key。
+    var setupHint by remember { mutableStateOf(!LlmConfig.isReady(context)) }
 
     // 念出来这件事是可选的：默认关，打开后她回的每一条都会轻轻念一遍。
     val speaker = rememberSpeaker()
@@ -208,8 +213,13 @@ fun ChatScreen(
             fullInject = ChatMemory.needsFullInject(context),
             history = ChatMemory.load(context).dropLast(1)
         )
-        val suggestion = LlmClient.ask(context, merged, pool, chat)
+        val outcome = LlmClient.askOutcome(context, merged, pool, chat)
         ChatMemory.bumpInject(context)
+        val suggestion = (outcome as? LlmClient.LlmResult.Ok)?.suggestion
+        val failReason = (outcome as? LlmClient.LlmResult.Fail)?.reason
+        // 只有"还没接入"才在输入框上方给可点的接入入口；
+        // 401/超时这类失败只要在气泡里把原因说清楚，用户自己能处理。
+        setupHint = failReason == LlmErrors.NOT_CONFIGURED
         val picked = suggestion?.let { LlmReplyParser.pick(pool, it.actionIds) }.orEmpty()
         if (suggestion != null) {
             // 模型按约定用 || 分隔每条消息；Humanizer 再兜一层拆句与去客服腔。
@@ -247,7 +257,7 @@ fun ChatScreen(
                 .let { b ->
                     Bubble(
                         false,
-                        b.text + "\n\n（刚才没连上模型，这是本地规则给的）",
+                        b.text + "\n\n（" + (failReason ?: "这次没接上模型，先用本地规则回你") + "）",
                         b.recommendations.map { it.action }
                     )
                 }
@@ -493,6 +503,27 @@ fun ChatScreen(
                 modifier = Modifier.padding(horizontal = 20.dp)
             )
             Spacer(Modifier.height(4.dp))
+        }
+
+        if (setupHint) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .background(Look.Card2, RoundedCornerShape(12.dp))
+                    .clickable { onOpenSetup() }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "还没接入你自己的模型，现在用的是本地规则。",
+                    color = CDim,
+                    fontSize = 11.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                Text("接入 →", color = CMint, fontSize = 12.sp)
+            }
+            Spacer(Modifier.height(2.dp))
         }
 
         Row(
