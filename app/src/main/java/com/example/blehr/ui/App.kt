@@ -611,7 +611,7 @@ private fun CharCard(
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        GirlMascot(mood = mood, size = 76.dp)
+        GirlMascot(mood = mood, size = 104.dp)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

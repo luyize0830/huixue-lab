@@ -105,7 +105,10 @@
   .muted{font-size:11px;color:var(--faint);line-height:1.7}
   .slider{width:100%;margin:10px 0 2px}
   .sd{display:flex;justify-content:space-between;font-size:11px;color:var(--dim)}
+  .category-art{display:block;width:100%;height:100%;object-fit:contain}
+  .brand-icon{width:28px;height:28px;border-radius:8px;vertical-align:middle;margin-right:8px}
 </style>
+<link rel="icon" href="assets/art-v024/app-icon.webp" type="image/webp">
 </head>
 <body>
 <div id="app"></div>
@@ -239,81 +242,12 @@ function recsFor(budget, night, exclude){
 
 /* ---------------- 头像 ---------------- */
 function girl(mood, size){
-  const w = size||76, h = Math.round(w*1.2);
-  const H1 = "#2B4573", H2 = "#3C5F96", H3 = "#5B84BE";
-  // 眼睛：半眯的困眼
-  const eyeOpen = ''
-    + '<ellipse cx="37.5" cy="53" rx="6.1" ry="5.2" fill="#FFFFFF"/>'
-    + '<ellipse cx="37.5" cy="53.6" rx="3.5" ry="4.1" fill="#7FB6EA"/>'
-    + '<circle cx="37.5" cy="54" r="1.6" fill="#2A3B58"/>'
-    + '<circle cx="39.1" cy="51.6" r="0.95" fill="#FFFFFF"/>'
-    + '<path d="M31.4 50.4 q6.1 -2.4 12.2 0" stroke="#E9C9B4" stroke-width="3.1" fill="none" stroke-linecap="round"/>'
-    + '<path d="M31.2 53.2 q6.3 -1.8 12.6 0" stroke="#2A3B58" stroke-width="1.25" fill="none" stroke-linecap="round" opacity=".75"/>'
-    + '<ellipse cx="62.5" cy="53" rx="6.1" ry="5.2" fill="#FFFFFF"/>'
-    + '<ellipse cx="62.5" cy="53.6" rx="3.5" ry="4.1" fill="#7FB6EA"/>'
-    + '<circle cx="62.5" cy="54" r="1.6" fill="#2A3B58"/>'
-    + '<circle cx="64.1" cy="51.6" r="0.95" fill="#FFFFFF"/>'
-    + '<path d="M56.4 50.4 q6.1 -2.4 12.2 0" stroke="#E9C9B4" stroke-width="3.1" fill="none" stroke-linecap="round"/>'
-    + '<path d="M56.2 53.2 q6.3 -1.8 12.6 0" stroke="#2A3B58" stroke-width="1.25" fill="none" stroke-linecap="round" opacity=".75"/>';
-  // 眼睛：开心时弯成月牙
-  const eyeSmile = ''
-    + '<path d="M31.6 54.4 q5.9 -6.4 11.8 0" stroke="#2A3B58" stroke-width="2.5" fill="none" stroke-linecap="round"/>'
-    + '<path d="M56.6 54.4 q5.9 -6.4 11.8 0" stroke="#2A3B58" stroke-width="2.5" fill="none" stroke-linecap="round"/>';
-  const brow = mood === "worried"
-    ? '<path d="M31.4 44.2 q6.2 2.6 12.2 .6" stroke="'+H1+'" stroke-width="2" fill="none" stroke-linecap="round"/>'
-      + '<path d="M56.4 44.8 q6 -2 12.2 -.6" stroke="'+H1+'" stroke-width="2" fill="none" stroke-linecap="round"/>'
-    : '';
-  const mouth = mood === "worried"
-    ? '<path d="M45.5 65.4 q4.5 -3.2 9 0" stroke="#C0746A" stroke-width="2" fill="none" stroke-linecap="round"/>'
-    : mood === "happy"
-      ? '<path d="M45 64.4 q5 4.4 10 0" stroke="#C0746A" stroke-width="2" fill="none" stroke-linecap="round"/>'
-      : '<path d="M46.4 64.8 q3.6 2.2 7.2 0" stroke="#C0746A" stroke-width="1.9" fill="none" stroke-linecap="round"/>';
-  const extra = mood === "worried"
-    ? '<path d="M85 32 q2.4 4.4 0 6.2 q-2.4 -1.8 0 -6.2 z" fill="#8FB6DA"/>'
-    : mood === "happy"
-      ? '<circle cx="86" cy="30" r="3.1" fill="rgba(143,182,218,.6)"/><circle cx="93" cy="39" r="2.1" fill="rgba(143,182,218,.45)"/>'
-      : '<text x="84" y="36" font-size="10" fill="#9CBCD8" font-family="sans-serif" font-weight="600">z</text>'
-        + '<text x="90" y="27" font-size="7.5" fill="#9CBCD8" font-family="sans-serif" font-weight="600">z</text>';
-
-  let s = '<svg class="avatar" width="'+w+'" height="'+h+'" viewBox="0 0 100 120" fill="none">';
-  // 后发
-  s += '<ellipse cx="50" cy="58" rx="31" ry="36" fill="'+H1+'"/>';
-  // 双马尾
-  s += '<path d="M22 46 q-9 12 -7 30 q1.6 12 10 10 q7 -2 5 -13 q-2.5 -14 2 -24 z" fill="'+H2+'"/>';
-  s += '<path d="M78 46 q9 12 7 30 q-1.6 12 -10 10 q-7 -2 -5 -13 q2.5 -14 -2 -24 z" fill="'+H2+'"/>';
-  s += '<path d="M21 56 q-4 12 -2 22" stroke="'+H3+'" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55"/>';
-  s += '<path d="M79 56 q4 12 2 22" stroke="'+H3+'" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55"/>';
-  // 脖子与领口
-  s += '<path d="M43 76 h14 v7 q-7 4 -14 0 z" fill="#EFC7B0"/>';
-  s += '<path d="M33 86 q17 -5 34 0 l3 20 q-20 7 -40 0 z" fill="#FBF8F2"/>';
-  s += '<path d="M50 90 l4.6 5.4 -4.6 5 -4.6 -5 z" fill="#6C9AD6"/>';
-  s += '<path d="M32 92 q18 6 36 0" stroke="#E3DBD0" stroke-width="1.2" fill="none"/>';
-  // 脸
-  s += '<ellipse cx="50" cy="54" rx="23.2" ry="22.6" fill="#FBE0CE"/>';
-  // 刘海
-  s += '<path d="M26 47 C26 27 36 18.5 50 18.5 C64 18.5 74 27 74 47 '
-     + 'C70.5 39 66 35.6 62 43 C58.6 35.4 53.6 39.6 50 32.6 C46.4 39.6 41.4 35.4 38 43 C34 35.6 29.5 39 26 47 Z" fill="'+H2+'"/>';
-  s += '<path d="M33 33 q4.5 -6.5 10 -7.4 q-3.4 5.6 -10 7.4 z" fill="'+H3+'" opacity=".75"/>';
-  s += '<path d="M50 19.5 q2.6 4.4 .4 8" stroke="'+H2+'" stroke-width="2.2" stroke-linecap="round"/>';
-  // 蕾丝头饰（一排小半圆）
-  let frill = '';
-  for (let i = 0; i < 5; i++){
-    const cx = 34 + i*8;
-    frill += '<path d="M'+(cx-4)+' 26 a4 4 0 0 1 8 0 z" fill="#FBF8F2"/>';
-  }
-  s += '<path d="M30 26.6 q20 -7 40 0" stroke="#FBF8F2" stroke-width="3.4" fill="none" stroke-linecap="round"/>';
-  s += frill;
-  // 蝴蝶结
-  s += '<path d="M29 30 q-7 -4 -9 2 q-1 5 6 4 z" fill="#6C9AD6"/>';
-  s += '<path d="M29 30 q7 -4 9 2 q1 5 -6 4 z" fill="#6C9AD6"/>';
-  s += '<circle cx="29" cy="31.4" r="1.9" fill="#4E7FBF"/>';
-  // 五官
-  s += brow + (mood === "happy" ? eyeSmile : eyeOpen) + mouth;
-  s += '<ellipse cx="31.5" cy="59" rx="4.4" ry="2.4" fill="#F0A79E" opacity=".5"/>';
-  s += '<ellipse cx="68.5" cy="59" rx="4.4" ry="2.4" fill="#F0A79E" opacity=".5"/>';
-  s += extra;
-  s += '</svg>';
-  return s;
+  const state = ["happy","idle","worried"].includes(mood) ? mood : "idle";
+  const w = size || 76;
+  return '<img class="avatar" src="assets/art-v024/art_v024_xiaoye_'+state+'.webp" width="'+w+'" height="'+w+'" alt="" aria-hidden="true">';
+}
+function categoryArt(category){
+  return '<img class="category-art" src="assets/art-v024/art_v024_category_'+category.toLowerCase()+'.webp" alt="'+CATS[category].label+'">';
 }
 
 /* ---------------- 图标 ---------------- */
@@ -364,7 +298,7 @@ function viewHome(){
   return `
   <div class="top">
     <div>
-      <div class="brand">回血实验室</div>
+      <div class="brand"><img class="brand-icon" src="assets/art-v024/app-icon.webp" alt="">回血实验室</div>
       <div class="sub">${done? "今天 · 已完成 "+done+" 次实验" : "今天 · 还没开始第一次"}</div>
     </div>
     <div class="pill">${ICON.pulse} 演示数据</div>
@@ -392,7 +326,7 @@ function viewHome(){
 
   <div class="card" style="margin-top:14px">
     <div class="row">
-      ${girl(m, 76)}
+      ${girl(m, 104)}
       <div style="flex:1">
         <div class="nameline">小夜<span class="mood">${moodLabel(m)}</span></div>
         <div class="bubble" style="margin-top:6px">${bubble}</div>
@@ -435,7 +369,7 @@ function viewRec(){
   ${S.recs.map(a => `
     <div class="rec" data-start="${a.id}">
       <div class="r1">
-        <div class="tag" style="background:${CATS[a.c].bg};color:${CATS[a.c].color}">${CATS[a.c].ch}</div>
+        <div class="tag" style="background:${CATS[a.c].bg};color:${CATS[a.c].color}">${categoryArt(a.c)}</div>
         <div class="t">${a.t}</div>
         <div class="m">${a.m} 分钟</div>
       </div>
@@ -536,7 +470,7 @@ function viewPool(){
   ${list.map(a=>`
     <div class="rec" data-start="${a.id}">
       <div class="r1">
-        <div class="tag" style="background:${CATS[a.c].bg};color:${CATS[a.c].color}">${CATS[a.c].ch}</div>
+        <div class="tag" style="background:${CATS[a.c].bg};color:${CATS[a.c].color}">${categoryArt(a.c)}</div>
         <div class="t">${a.t}</div>
         <div class="m">${a.m} 分钟</div>
       </div>
@@ -585,11 +519,11 @@ function viewChat(){
   <div id="chatbox">
     ${S.chat.map(t=> t.from==="me"
       ? '<div class="chatline me"><div class="b">'+esc(t.text)+'</div></div>'
-      : '<div class="chatline ai"><div class="b">'+esc(t.text)+'</div></div>'
+      : '<div class="chatline ai">'+girl(moodOf(assess().score),34)+'<div class="b">'+esc(t.text)+'</div></div>'
         + (t.recs? t.recs.map(a=>`
           <div class="rec" data-start="${a.id}" style="margin-left:0">
             <div class="r1">
-              <div class="tag" style="background:${CATS[a.c].bg};color:${CATS[a.c].color}">${CATS[a.c].ch}</div>
+              <div class="tag" style="background:${CATS[a.c].bg};color:${CATS[a.c].color}">${categoryArt(a.c)}</div>
               <div class="t">${a.t}</div><div class="m">${a.m} 分钟</div>
             </div>
           </div>`).join("") : "")
@@ -773,7 +707,7 @@ function viewMine(){
   <div class="card">
     <button class="btn ghost" data-clear="1">清空本地记录</button>
   </div>
-  <div class="foot">回血实验室 · 网页演示版 v0.1<br>第二十届全国大学生软件创新大赛 · 赛题四 AI＋健康</div>`;
+  <div class="foot">回血实验室 · 网页演示版 v0.24<br>第二十届全国大学生软件创新大赛 · 赛题四 AI＋健康</div>`;
 }
 
 document.addEventListener("click", e=>{

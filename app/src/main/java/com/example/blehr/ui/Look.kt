@@ -1,6 +1,7 @@
 package com.example.blehr.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -20,6 +22,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
@@ -34,6 +38,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.blehr.model.ActionCategory
+import com.example.blehr.R
 import kotlin.math.min
 
 /**
@@ -277,12 +282,21 @@ fun CategoryTag(category: ActionCategory, size: Dp = 34.dp, tint: Color = Look.A
             .background(tint.copy(alpha = 0.10f)),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            category.tagChar(),
-            fontSize = (size.value * 0.42f).sp,
-            fontWeight = FontWeight.Medium,
-            color = tint
-        )
+        if (size < 28.dp) {
+            Text(category.tagChar(), fontSize = (size.value * 0.42f).sp,
+                fontWeight = FontWeight.Medium, color = tint)
+        } else {
+            val artwork = when (category) {
+                ActionCategory.MOVE -> R.drawable.art_v024_category_move
+                ActionCategory.CALM -> R.drawable.art_v024_category_calm
+                ActionCategory.SOCIAL -> R.drawable.art_v024_category_social
+                ActionCategory.PLAY -> R.drawable.art_v024_category_play
+                ActionCategory.REST -> R.drawable.art_v024_category_rest
+                ActionCategory.FUEL -> R.drawable.art_v024_category_fuel
+            }
+            Image(painterResource(artwork), contentDescription = category.label,
+                contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+        }
     }
 }
 

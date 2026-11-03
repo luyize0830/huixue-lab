@@ -1,0 +1,77 @@
+{
+  "version": "0.24",
+  "generator": "built-in image_gen",
+  "date": "2026-11-03",
+  "assets": [
+    {
+      "name": "idle",
+      "source": "exec-f4451905-508c-4542-920f-069fc159161f.png",
+      "prompt": "Use case: stylized-concept. Asset type: production mobile companion avatar, a single transparent PNG, square 1024x1024.\nReference image: the attached blue-haired whale-maid community character is the visual reference for DeepSeek whale girl, not an edit target. Create a polished fresh illustration inspired by its recognizable blue-gradient hair, small whale-fin side ears, one ahoge, cream lace headband, navy-and-cream maid outfit and small blue bow. For the Huixue Lab app's companion \"小夜\". Preserve this recognizability; no logos, text or watermarks.\nSubject: one clearly adult feminine anime companion in a soft super-deformed chibi portrait, large head and small clothed shoulders/upper torso. Close, centered bust portrait filling 85% of square; entire hair/headband/ears and shoulders safely within frame with 7% empty margins. Front-facing, head upright. Her face is the main focus and large enough to read at 32px. Long blue hair frames shoulders symmetrically, navy-to-periwinkle gradients, teal-blue eyes. Small cream ruffles and a teal neck ribbon, subtle brass accent. Refined warm dark-blue outlines, soft cel shading, controlled highlights, beautiful hand-drawn anime illustration, not 3D.\nExpression: IDLE / gently sleepy: half-lidded eyes looking at viewer, very slight relaxed smile, calm reassuring companion, not sad. No gesture, no props. Palette: dusty navy #3C5F96, periwinkle #79A5D7, cream #F7F4EF, small muted teal #3D5A4A details. Only character, genuinely transparent background, no colored panel, no floor, no cast shadow outside silhouette. No extra limbs, no floating accessories, no words, no emoji.",
+      "resource": "art_v024_xiaoye_idle",
+      "maxEdge": 512
+    },
+    {
+      "name": "happy",
+      "source": "exec-a6ccfba0-21c3-443e-ad2e-d03e4e1cce4a.png",
+      "prompt": "Use case: identity-preserve. Production mobile app transparent portrait variant. Edit only the facial expression of the reference avatar. HAPPY expression: warm bright smile, both eyes gently closed into happy arcs, small naturally open smiling mouth. Kind relaxed happiness, not laughter, no tears. Keep EXACTLY the same person, head and body proportions, camera framing, position, hairstyle, hair silhouette, ahoge, whale fin ears, lace headband, teal hair bow, navy and cream outfit, neck ribbon and brooch, fine linework, colors, shading, transparency and image dimensions. No extra items, no labels, no text, no watermarks, no background. Face must remain readable at small app avatar size.",
+      "resource": "art_v024_xiaoye_happy",
+      "maxEdge": 512
+    },
+    {
+      "name": "worried",
+      "source": "exec-027ee4f0-451a-48f1-afcd-71381dbdd421.png",
+      "prompt": "Use case: identity-preserve. Production mobile app transparent portrait variant. Edit only the facial expression of the reference avatar. WORRIED expression: both eyes open looking at the viewer, inner eyebrows subtly raised with caring concern, a very small worried downturned mouth. Gentle concern for a tired friend, not crying, not panic, no sweat symbols. Keep EXACTLY the same person, head and body proportions, camera framing, position, hairstyle, hair silhouette, ahoge, whale fin ears, lace headband, teal hair bow, navy and cream outfit, neck ribbon and brooch, fine linework, colors, shading, transparency and image dimensions. No extra items, no labels, no text, no watermarks, no background. Face must remain readable at small app avatar size.",
+      "resource": "art_v024_xiaoye_worried",
+      "maxEdge": 512
+    },
+    {
+      "name": "move",
+      "source": "exec-ef7d1e51-9fc0-4974-ac1c-30b23bbd09ac.png",
+      "prompt": "Use case: stylized-concept. Asset type: a single production illustration icon for the \"动一动\" category of a calm mobile wellbeing app. Square 512x512 PNG with genuinely transparent background. Subject: one side-view comfortable walking sneaker, muted sage green upper, cream sole, navy lace accents, a small curved motion stroke behind it. Style: refined hand-drawn anime-adjacent enamel sticker, soft cel shading, slightly tactile rounded forms, confident clean dusty navy outline, quiet cream/sage/blue/coral palette. ONE unified centered icon, no tile, no circle container, no scenery. Main silhouette fills 72 percent of square with even 14 percent safe margins on all sides. Icon must remain immediately legible at 32px: very few broad color regions, bold simple shapes, no tiny ornamental detail. Soft highlight upper left, minimal internal shading, absolutely no ground shadow or colored background. No lettering, words, numbers, brand marks or watermark. Not a sprite sheet or collage.",
+      "resource": "art_v024_category_move",
+      "maxEdge": 256
+    },
+    {
+      "name": "calm",
+      "source": "exec-dd0a50d0-1f16-4329-a02e-0656101c60a8.png",
+      "prompt": "Use case: stylized-concept. Asset type: a single production illustration icon for the \"静一静\" category of a calm mobile wellbeing app. Square 512x512 PNG with genuinely transparent background. Subject: one stylized lotus blossom with three broad periwinkle and dusty teal petals, tiny cream center, a single calm curved water line beneath. Style: refined hand-drawn anime-adjacent enamel sticker, soft cel shading, slightly tactile rounded forms, confident clean dusty navy outline, quiet cream/sage/blue/coral palette. ONE unified centered icon, no tile, no circle container, no scenery. Main silhouette fills 72 percent of square with even 14 percent safe margins on all sides. Icon must remain immediately legible at 32px: very few broad color regions, bold simple shapes, no tiny ornamental detail. Soft highlight upper left, minimal internal shading, absolutely no ground shadow or colored background. No lettering, words, numbers, brand marks or watermark. Not a sprite sheet or collage.",
+      "resource": "art_v024_category_calm",
+      "maxEdge": 256
+    },
+    {
+      "name": "social",
+      "source": "exec-49fe20cc-f81a-41ad-b21f-60e9d68e32f7.png",
+      "prompt": "Use case: stylized-concept. Asset type: a single production illustration icon for the \"聊一聊\" category of a calm mobile wellbeing app. Square 512x512 PNG with genuinely transparent background. Subject: two overlapping rounded chat bubbles, one muted ochre and cream and the smaller one dusty blue, three bold simple dots inside the front bubble. Style: refined hand-drawn anime-adjacent enamel sticker, soft cel shading, slightly tactile rounded forms, confident clean dusty navy outline, quiet cream/sage/blue/coral palette. ONE unified centered icon, no tile, no circle container, no scenery. Main silhouette fills 72 percent of square with even 14 percent safe margins on all sides. Icon must remain immediately legible at 32px: very few broad color regions, bold simple shapes, no tiny ornamental detail. Soft highlight upper left, minimal internal shading, absolutely no ground shadow or colored background. No lettering, words, numbers, brand marks or watermark. Not a sprite sheet or collage.",
+      "resource": "art_v024_category_social",
+      "maxEdge": 256
+    },
+    {
+      "name": "play",
+      "source": "exec-ffb6cfa7-ba4e-414c-be9d-05a362ff6170.png",
+      "prompt": "Use case: stylized-concept. Asset type: a single production illustration icon for the \"玩一下\" category of a calm mobile wellbeing app. Square 512x512 PNG with genuinely transparent background. Subject: one small handheld game controller, rounded coral body, navy plus-shaped directional pad and two cream round buttons, no screen. Style: refined hand-drawn anime-adjacent enamel sticker, soft cel shading, slightly tactile rounded forms, confident clean dusty navy outline, quiet cream/sage/blue/coral palette. ONE unified centered icon, no tile, no circle container, no scenery. Main silhouette fills 72 percent of square with even 14 percent safe margins on all sides. Icon must remain immediately legible at 32px: very few broad color regions, bold simple shapes, no tiny ornamental detail. Soft highlight upper left, minimal internal shading, absolutely no ground shadow or colored background. No lettering, words, numbers, brand marks or watermark. Not a sprite sheet or collage.",
+      "resource": "art_v024_category_play",
+      "maxEdge": 256
+    },
+    {
+      "name": "rest",
+      "source": "exec-916baf2f-7cbe-4ab6-b206-fae21d8cf50d.png",
+      "prompt": "Use case: stylized-concept. Asset type: a single production illustration icon for the \"歇一会\" category of a calm mobile wellbeing app. Square 512x512 PNG with genuinely transparent background. Subject: one sleepy deep periwinkle crescent moon cradling a small cream cloud, one small muted gold four-point star nearby. Style: refined hand-drawn anime-adjacent enamel sticker, soft cel shading, slightly tactile rounded forms, confident clean dusty navy outline, quiet cream/sage/blue/coral palette. ONE unified centered icon, no tile, no circle container, no scenery. Main silhouette fills 72 percent of square with even 14 percent safe margins on all sides. Icon must remain immediately legible at 32px: very few broad color regions, bold simple shapes, no tiny ornamental detail. Soft highlight upper left, minimal internal shading, absolutely no ground shadow or colored background. No lettering, words, numbers, brand marks or watermark. Not a sprite sheet or collage.",
+      "resource": "art_v024_category_rest",
+      "maxEdge": 256
+    },
+    {
+      "name": "fuel",
+      "source": "exec-e830b2f6-cd84-4f58-b347-edd4cea3d4c9.png",
+      "prompt": "Use case: stylized-concept. Asset type: a single production illustration icon for the \"补给\" category of a calm mobile wellbeing app. Square 512x512 PNG with genuinely transparent background. Subject: one small transparent-looking pale aqua drinking glass half full of water, a single sage green leaf beside it, very simple bold silhouette. Style: refined hand-drawn anime-adjacent enamel sticker, soft cel shading, slightly tactile rounded forms, confident clean dusty navy outline, quiet cream/sage/blue/coral palette. ONE unified centered icon, no tile, no circle container, no scenery. Main silhouette fills 72 percent of square with even 14 percent safe margins on all sides. Icon must remain immediately legible at 32px: very few broad color regions, bold simple shapes, no tiny ornamental detail. Soft highlight upper left, minimal internal shading, absolutely no ground shadow or colored background. No lettering, words, numbers, brand marks or watermark. Not a sprite sheet or collage.",
+      "resource": "art_v024_category_fuel",
+      "maxEdge": 256
+    },
+    {
+      "name": "launcher",
+      "source": "exec-5bcef5de-f1f1-4736-ae40-7b0fb5096d16.png",
+      "prompt": "Use case: logo-brand. Asset type: single Android adaptive launcher foreground mark, transparent square PNG 1024x1024.\nCreate an elegant illustrated logo for the Chinese wellness app \"回血实验室\". The ONLY symbol is the Chinese character 回, rendered geometrically as TWO nested rounded square cream outline loops, a broad outer rounded square and smaller inner rounded square, clearly recognizable as 回. One small muted ochre circular dot rests just outside the outer loop near its upper-right corner. No other letters or words. Keep the shape bold and extremely simple so it reads at 48px.\nStyle: soft hand-painted enamel, smooth cream #F7F4EF shapes with subtle warm shading, restrained muted brass dot #B0842E, tiny navy accent only if needed for dimensional separation, absolutely no noisy texture. Straight-on flat centered geometry, no perspective tilt. The monogram fills 76% of the square with generous even empty safe margins. GENUINELY TRANSPARENT background, transparent holes between loops, no colored tile, no background, no ground or external shadow, no watermark. This will be placed onto a dark forest-green adaptive icon background by the app. Produce one icon only, not a presentation board.",
+      "resource": "art_v024_launcher",
+      "maxEdge": 512
+    }
+  ]
+}

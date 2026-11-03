@@ -26,6 +26,18 @@ test('normal startup and the four tabs render', () => {
   })`), true);
 });
 
+test('all companion expressions and category illustrations resolve to bundled files', () => {
+  const run=boot();
+  const snippets=JSON.parse(run(`JSON.stringify([
+    ...['happy','idle','worried'].map(m=>girl(m,76)),
+    ...Object.keys(CATS).map(c=>categoryArt(c))
+  ])`));
+  for(const snippet of snippets){
+    const src=snippet.match(/src="([^"]+)"/)[1];
+    assert.ok(fs.existsSync(path.join(__dirname,src)),src);
+  }
+});
+
 test('one-minute budget is respected', () => {
   assert.equal(boot()('recsFor(1, false, []).every(a => a.m <= 1)'), true);
 });

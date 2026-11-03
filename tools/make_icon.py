@@ -14,11 +14,13 @@
 """
 import math
 import os
+from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-RES = r"C:\Users\34243\AndroidStudioProjects\BleHrDemo\app\src\main\res"
-OUT = r"C:\Users\34243\Desktop\软件大赛\assets"
+ROOT = Path(__file__).resolve().parents[1]
+RES = str(ROOT / "app/src/main/res")
+OUT = str(ROOT / "assets")
 
 GREEN = (61, 90, 74)      # Look.Accent
 CREAM = (247, 244, 239)   # Look.Paper

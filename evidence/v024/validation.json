@@ -1,0 +1,27 @@
+{
+  "versionName": "0.24",
+  "versionCode": 25,
+  "date": "2026-11-03",
+  "jvm": {
+    "tests": 234,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "classes": 28,
+  "web": {
+    "tests": 11,
+    "failures": 0
+  },
+  "generatedAssets": 10,
+  "runtimeArtBytes": 936086,
+  "assetChecks": "alpha, dimensions, hashes, Android/web equality, APK presence passed",
+  "apk": {
+    "file": "huixue-lab-v0.24-debug.apk",
+    "bytes": 18580431,
+    "sha256": "de1711436b62bd0bf636d73864e7347a4407992894654ea0d8d8ef5f5e847a42"
+  },
+  "androidDeviceValidation": false,
+  "browserImagesMissing": 0,
+  "githubSync": "blocked by missing write authorization"
+}

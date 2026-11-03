@@ -79,7 +79,7 @@ fun LoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (!editMode) {
-                GirlMascot(mood = MascotMood.IDLE, size = 112.dp)
+                GirlMascot(mood = MascotMood.IDLE, size = 156.dp)
                 Spacer(Modifier.height(6.dp))
             }
 

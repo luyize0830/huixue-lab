@@ -1,0 +1,98 @@
+{
+  "version": "0.24",
+  "generator": "built-in image_gen",
+  "assets": [
+    {
+      "name": "idle",
+      "file": "art_v024_xiaoye_idle.webp",
+      "width": 512,
+      "height": 512,
+      "bytes": 234732,
+      "sourceSha256": "9ee8de57287d9dff6873a54e3c7c9bcdc261cd5b8a867626ef8f380714ea19cb",
+      "sha256": "347b1cb2546994257e4d9c8951c0163ab6907a57e47d03f248a91e9baa96f195"
+    },
+    {
+      "name": "happy",
+      "file": "art_v024_xiaoye_happy.webp",
+      "width": 512,
+      "height": 512,
+      "bytes": 228244,
+      "sourceSha256": "5fc062d040843698ec27cf8a7f83ebb8da63391ffe40f7a6ce73a15743c83a7a",
+      "sha256": "ed83105337775cfa142b469cddddce859472aaf5e92ca85dd79f0f44d922c114"
+    },
+    {
+      "name": "worried",
+      "file": "art_v024_xiaoye_worried.webp",
+      "width": 512,
+      "height": 512,
+      "bytes": 229284,
+      "sourceSha256": "92cead5954e77567886cef43f98cc0a26101bc0f1870f76d86c28cf41290cbcf",
+      "sha256": "f5a574aaa0bfc250b1e4025fe7689c5918339008ed59080513edb4e92cf0d3e2"
+    },
+    {
+      "name": "move",
+      "file": "art_v024_category_move.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 25524,
+      "sourceSha256": "66e8d2d724b7525b336b749134a888d5180036d6849dae282339c8f135df8867",
+      "sha256": "2bb9bbf9d9a5d67280f00d803ac0a4eafe666977921b0dd35bddc5903936739b"
+    },
+    {
+      "name": "calm",
+      "file": "art_v024_category_calm.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 29206,
+      "sourceSha256": "2842c9a5b2462b2772cc5f22c108a46759a0f8dcf7d650641dbd7c20970563d3",
+      "sha256": "fe1f8e49593abcbde1c65efe2c8c34681debf3a36415e54c88787428c33a44b6"
+    },
+    {
+      "name": "social",
+      "file": "art_v024_category_social.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 29356,
+      "sourceSha256": "7d8252d223a058c49d2f3c20f3ba23d37a7501e96753d9263ff4539c2543cc30",
+      "sha256": "6742c1956b477f4a08d5e22355371ff5fd820e5a7a344545d731eef92b9b0773"
+    },
+    {
+      "name": "play",
+      "file": "art_v024_category_play.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 29844,
+      "sourceSha256": "abe09448ab74a4d0433f1c6c4077a3f32aa11908f330bf2c4a74aab49cec1819",
+      "sha256": "ef9584a711bc96baf160edbbb2e873c10c6a7e74019774cfed9e53a36897ecaa"
+    },
+    {
+      "name": "rest",
+      "file": "art_v024_category_rest.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 27324,
+      "sourceSha256": "03800e0e87eb016428889cb87fda0f7fd976fc79adceabff28a3cc240b69fce2",
+      "sha256": "2900149e119cf6e4781607af62f013a68afbd817e2392ac5cc200dfd7e4db006"
+    },
+    {
+      "name": "fuel",
+      "file": "art_v024_category_fuel.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 23728,
+      "sourceSha256": "cfcb0bba175af2c037ed64e88ab45851e5e948bf3226343e9eb011fefd5bf25c",
+      "sha256": "7275462f2d507ed9d74198ea179ce78ab5a9dffa865ec7b1d699df83eec1ce1e"
+    },
+    {
+      "name": "launcher",
+      "file": "art_v024_launcher.webp",
+      "width": 512,
+      "height": 512,
+      "bytes": 78844,
+      "sourceSha256": "210e2ee2be7d5881f4323fbe46270246bfecc6c093fbb82c4799fe514f97c9a7",
+      "sha256": "b056caba191c77f453919c75590b69b4cc3608173d8de0d031a863b77cf82550"
+    }
+  ],
+  "runtimeBytes": 936086,
+  "processing": "alpha-preserving downscale and lossless encoding; no content edits"
+}

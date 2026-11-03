@@ -384,7 +384,7 @@ fun ChatScreen(
                 } else {
                     Column(Modifier.fillMaxWidth()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            GirlMascot(mood = mood, size = 26.dp, animated = false)
+                            GirlMascot(mood = mood, size = 34.dp, animated = false)
                             Spacer(Modifier.width(6.dp))
                             Text(Persona.NAME, fontSize = 10.sp, color = CDim)
                         }
