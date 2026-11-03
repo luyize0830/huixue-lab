@@ -59,9 +59,11 @@ class LlmReplyParserTest {
     fun `缺 reply 返回 null，缺 actionIds 当成没有行动`() {
         assertNull(LlmReplyParser.parse("""{"actionIds":["walk"]}"""))
         assertNull(LlmReplyParser.parse("""{"reply":"","actionIds":["walk"]}"""))
-        assertNull(LlmReplyParser.parse("完全不是 JSON"))
         assertNull(LlmReplyParser.parse(""))
         assertNull(LlmReplyParser.parse(null))
+
+        // v0.21：完全不是 JSON 的，就当她把这句话说出来了，不再判成"没看懂"
+        assertEquals("完全不是 JSON", LlmReplyParser.parse("完全不是 JSON")!!.reply)
 
         // v0.11：她可以只是聊两句，不摆卡片
         val chat = LlmReplyParser.parse("""{"reply":"今天就这样吧，早点睡"}""")!!
@@ -118,5 +120,33 @@ class LlmReplyParserTest {
         assertTrue(u.contains("有点累"))
         assertTrue(u.contains("walk"))
         assertTrue(u.contains("低电量") || u.contains("低"))
+    }
+
+    @Test
+    fun `模型没按 JSON 回也算一句话`() {
+        // 真实模型经常不听话，直接回一段话。以前这种会被判成"格式错"，
+        // 用户看到的是"模型回的话我没看懂"——其实她明明说了人话。
+        val s = LlmReplyParser.parse("三点还亮着灯啊。别撑了，喝口水吧。")!!
+        assertEquals("三点还亮着灯啊。别撑了，喝口水吧。", s.reply)
+        assertTrue(s.actionIds.isEmpty())
+    }
+
+    @Test
+    fun `代码围栏里的纯文本也能用`() {
+        val s = LlmReplyParser.parse("```\n嗯，我在。\n```")!!
+        assertEquals("嗯，我在。", s.reply)
+    }
+
+    @Test
+    fun `不把行动清单念给用户听`() {
+        val raw = """{"reply":"躺着就躺着吧。\ncold | 冷水洗把脸\nwater | 接一杯水慢慢喝","actionIds":["cold"]}"""
+        val s = LlmReplyParser.parse(raw)!!
+        assertEquals("躺着就躺着吧。", s.reply)
+        assertEquals(listOf("cold"), s.actionIds)
+    }
+
+    @Test
+    fun `是 JSON 但没有 reply 仍然当格式错`() {
+        assertEquals(null, LlmReplyParser.parse("""{"actionIds":["walk"]}"""))
     }
 }

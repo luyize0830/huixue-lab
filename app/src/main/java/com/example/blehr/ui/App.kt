@@ -478,10 +478,7 @@ fun HuixueApp(
                         llmEnabled = v
                         LlmConfig.setEnabled(ctx, v)
                     },
-                    onSaveLlmKey = { k ->
-                        llmKey = k
-                        LlmConfig.setApiKey(ctx, k)
-                    },
+                    onOpenSetup = { screen = Screen.ModelSetup },
                     onExport = { shareCsv(ctx, Repo.records, Repo.pool) },
                     onClearRecords = { Repo.clearRecords() },
                     versionText = versionText

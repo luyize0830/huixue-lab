@@ -73,18 +73,17 @@ fun MineScreen(
     onOpenReport: () -> Unit,
     onOpenPersona: () -> Unit,
     onOpenMusic: () -> Unit,
+    onOpenSetup: () -> Unit,
     voiceEnabled: Boolean,
     onToggleVoice: (Boolean) -> Unit,
     llmEnabled: Boolean,
     llmHasKey: Boolean,
     onToggleLlm: (Boolean) -> Unit,
-    onSaveLlmKey: (String) -> Unit,
     onExport: () -> Unit,
     onClearRecords: () -> Unit,
     versionText: String
 ) {
     var confirmClear by remember { mutableStateOf(false) }
-    var editingKey by remember { mutableStateOf(false) }
 
     Column(
         Modifier
@@ -307,12 +306,12 @@ fun MineScreen(
         }
         Spacer(Modifier.height(8.dp))
         EntryCard(
-            title = if (llmHasKey) "API Key 已填写" else "填写 API Key",
-            subtitle = "只存在这台手机的应用私有目录里，不会发给我们的服务器（我们也没有服务器）。" +
-                "发出去的只有你刚打的那句话和行动目录，不含心率与历史记录。",
-            chipText = if (llmHasKey) "更换" else "填写",
+            title = if (llmHasKey) "模型已接入" else "接入我的模型",
+            subtitle = "服务地址、模型名、API Key 都在这一页改；填错了也能回来改。" +
+                "只存在这台手机里，不会发给我们的服务器（我们也没有服务器）。",
+            chipText = "设置",
             chipColor = Look.Accent,
-            onClick = { editingKey = true }
+            onClick = onOpenSetup
         )
 
         // ---- 角色 ----
@@ -424,89 +423,12 @@ fun MineScreen(
             containerColor = Look.Card
         )
     }
-
-    if (editingKey) {
-        LlmKeyDialog(
-            onDismiss = { editingKey = false },
-            onSave = { k ->
-                editingKey = false
-                onSaveLlmKey(k)
-            }
-        )
-    }
 }
 
 @Composable
 private fun SectionTitle(text: String) {
     SmallCaps(text)
     Spacer(Modifier.height(8.dp))
-}
-
-/**
- * API Key 的填写框。
- *
- * 三件事必须明说：存在哪、会发什么出去、怎么删。少一句都算糊弄用户。
- */
-@Composable
-private fun LlmKeyDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
-    var key by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("填写 API Key", color = Look.Ink) },
-        text = {
-            Column {
-                Text(
-                    "以 sk- 开头的那一串。存进本机应用私有目录，" +
-                        "不会上传到我们这边（我们没有服务器）。",
-                    fontSize = 12.sp, color = Look.InkSoft, lineHeight = 18.sp
-                )
-                Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = key,
-                    onValueChange = { key = it },
-                    label = { Text("API Key") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Look.Accent,
-                        unfocusedBorderColor = Look.Hair,
-                        focusedLabelColor = Look.Accent,
-                        cursorColor = Look.Accent
-                    )
-                )
-                // 粘贴/输入时掉几个字符太常见了，直接存下去只会得到"点了没反应"。
-                // 所以这里当场校验，不合格就不让保存。
-                val trimmed = key.trim()
-                val looksValid = trimmed.startsWith("sk-") && trimmed.length >= 20
-                if (trimmed.isNotEmpty() && !looksValid) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "看起来不完整：应该以 sk- 开头、20 位以上（共 51 位）。",
-                        fontSize = 11.sp, color = Look.Clay, lineHeight = 16.sp
-                    )
-                }
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    "发出去的只有：你刚打的那句话 + 可选行动目录（名字和时长）。" +
-                        "心率、记录、账号都不会发。",
-                    fontSize = 11.sp, color = Look.InkFaint, lineHeight = 16.sp
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onSave(key.trim()) },
-                enabled = key.trim().isEmpty() || (key.trim().startsWith("sk-") && key.trim().length >= 20)
-            ) { Text("保存", color = Look.Accent) }
-        },
-        dismissButton = {
-            Row {
-                TextButton(onClick = { onSave("") }) { Text("清除", color = Look.Clay) }
-                TextButton(onClick = onDismiss) { Text("取消", color = Look.InkSoft) }
-            }
-        },
-        containerColor = Look.Card
-    )
 }
 
 @Composable

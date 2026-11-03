@@ -116,9 +116,12 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     var voiceError by remember { mutableStateOf<String?>(null) }
     var thinking by remember { mutableStateOf(false) }
-    // 没接入模型时，输入框上方直接给一条能点的提示——
-    // 不然用户看到的永远是"没连上模型"这句话，却不知道是自己没填 Key。
-    var setupHint by remember { mutableStateOf(!LlmConfig.isReady(context)) }
+    // 上一次为什么没成，直接摆在输入框上方，并且能点进设置页去改。
+    // 不只是"没接入"：地址填错（404）、Key 失效（401）、返回格式不对都算——
+    // 只给一句话不给改的地方，等于把问题推回给用户。
+    var setupReason by remember {
+        mutableStateOf<String?>(if (LlmConfig.isReady(context)) null else LlmErrors.NOT_CONFIGURED)
+    }
 
     // 念出来这件事是可选的：默认关，打开后她回的每一条都会轻轻念一遍。
     val speaker = rememberSpeaker()
@@ -217,9 +220,8 @@ fun ChatScreen(
         ChatMemory.bumpInject(context)
         val suggestion = (outcome as? LlmClient.LlmResult.Ok)?.suggestion
         val failReason = (outcome as? LlmClient.LlmResult.Fail)?.reason
-        // 只有"还没接入"才在输入框上方给可点的接入入口；
-        // 401/超时这类失败只要在气泡里把原因说清楚，用户自己能处理。
-        setupHint = failReason == LlmErrors.NOT_CONFIGURED
+        // 成功就把提示条收走；失败就把原因留在那儿，等用户去改设置。
+        setupReason = if (failReason == null) null else failReason
         val picked = suggestion?.let { LlmReplyParser.pick(pool, it.actionIds) }.orEmpty()
         if (suggestion != null) {
             // 模型按约定用 || 分隔每条消息；Humanizer 再兜一层拆句与去客服腔。
@@ -505,7 +507,7 @@ fun ChatScreen(
             Spacer(Modifier.height(4.dp))
         }
 
-        if (setupHint) {
+        setupReason?.let { reason ->
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -516,12 +518,14 @@ fun ChatScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "还没接入你自己的模型，现在用的是本地规则。",
+                    reason,
                     color = CDim,
                     fontSize = 11.sp,
+                    lineHeight = 16.sp,
                     modifier = Modifier.weight(1f)
                 )
-                Text("接入 →", color = CMint, fontSize = 12.sp)
+                Spacer(Modifier.width(8.dp))
+                Text("改设置 →", color = CMint, fontSize = 12.sp)
             }
             Spacer(Modifier.height(2.dp))
         }
