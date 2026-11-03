@@ -1,0 +1,660 @@
+
+/* ---------------- 数据 ---------------- */
+const CATS = {
+  MOVE:{label:"动一动",ch:"动",color:"#5A7A4C",bg:"rgba(90,122,76,.12)"},
+  CALM:{label:"静一静",ch:"静",color:"#3D5A4A",bg:"rgba(61,90,74,.12)"},
+  SOCIAL:{label:"找人说两句",ch:"聊",color:"#B0842E",bg:"rgba(176,132,46,.13)"},
+  PLAY:{label:"玩一下",ch:"玩",color:"#BF5B3F",bg:"rgba(191,91,63,.12)"},
+  REST:{label:"歇一会儿",ch:"歇",color:"#6E6659",bg:"rgba(110,102,89,.12)"},
+  FUEL:{label:"吃点喝点",ch:"吃",color:"#4A87C4",bg:"rgba(74,135,196,.12)"}
+};
+
+const POOL = [
+  {id:"walk",t:"下楼走一圈",m:5,c:"MOVE",cue:"别带手机，就绕楼走一圈。"},
+  {id:"stairs",t:"爬两层楼梯",m:3,c:"MOVE",cue:"上两层再下来，别坐电梯。"},
+  {id:"stretch",t:"站起来伸个懒腰",m:2,c:"MOVE",cue:"手举过头顶，停五秒再放下。"},
+  {id:"sun",t:"去窗边晒两分钟",m:2,c:"MOVE",cue:"脸朝窗户，别刷手机。"},
+  {id:"jump",t:"原地跳二十下",m:1,c:"MOVE",cue:"踮脚跳，落地轻一点。"},
+  {id:"breath",t:"4-7-8 呼吸",m:3,c:"CALM",cue:"吸四拍、屏七拍、呼八拍，做四轮。"},
+  {id:"far",t:"看远处两分钟",m:2,c:"CALM",cue:"找最远的楼或树，看两分钟。"},
+  {id:"song",t:"听完一首歌",m:4,c:"PLAY",cue:"挑一首熟的，别切歌。"},
+  {id:"shoulder",t:"揉开肩膀",m:3,c:"CALM",cue:"用手掌压住肩颈，慢慢转圈。"},
+  {id:"cold",t:"冷水洗把脸",m:1,c:"CALM",cue:"水凉一点，洗到脖子。"},
+  {id:"voice",t:"给朋友发条语音",m:4,c:"SOCIAL",cue:"说一句「我有点累」就够了。"},
+  {id:"roommate",t:"跟室友说两句闲话",m:3,c:"SOCIAL",cue:"不聊正事，聊别的。"},
+  {id:"call",t:"给家里人打个电话",m:5,c:"SOCIAL",cue:"只说三件事，别报忧。"},
+  {id:"share",t:"把状态发群里",m:2,c:"SOCIAL",cue:"一个字也行。"},
+  {id:"video",t:"看一个搞笑视频",m:3,c:"PLAY",cue:"一个就好，别连刷。"},
+  {id:"game",t:"玩一局小游戏",m:5,c:"PLAY",cue:"一局结束就停。"},
+  {id:"pet",t:"撸猫或者抱枕",m:3,c:"PLAY",cue:"抱一会儿，什么也不想。"},
+  {id:"draw",t:"随手画点没用的",m:3,c:"PLAY",cue:"画丑没关系。"},
+  {id:"lie",t:"平躺闭眼十分钟",m:10,c:"REST",cue:"别睡着，就躺着。"},
+  {id:"eyes",t:"热敷眼睛",m:5,c:"REST",cue:"热毛巾敷五分钟。"},
+  {id:"nap",t:"趴桌上眯一会儿",m:8,c:"REST",cue:"定个八分钟闹钟。"},
+  {id:"wash",t:"洗把脸换件衣服",m:4,c:"REST",cue:"换件干净的，人会清醒一点。"},
+  {id:"water",t:"接一杯水慢慢喝",m:1,c:"FUEL",cue:"别一口闷，慢慢喝完。"},
+  {id:"fruit",t:"吃个水果",m:3,c:"FUEL",cue:"洗一下，坐下来吃。"},
+  {id:"tea",t:"泡杯茶",m:4,c:"FUEL",cue:"等水开的这几分钟也算休息。"},
+  {id:"nuts",t:"吃点坚果",m:2,c:"FUEL",cue:"一小把就够。"}
+];
+
+const KEY="huixue_web_v1";
+let S = {
+  screen:"home",
+  recs:[], batch:0, excluded:[],
+  action:null, left:0, timerId:null, hrBefore:null,
+  seenIntro:false,
+  chat:null, chatInput:"",
+  poolFilter:"ALL",
+  flash:""
+};
+let data = load();
+
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return {records:[], nudgeOn:true, demo:{focus:125, screen:45, hour:new Date().getHours()}};
+}
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(data)); }catch(e){} }
+
+/* ---------------- 状态模型 ---------------- */
+function assess(){
+  const d = data.demo;
+  let p = 0; const reasons = [];
+  if(d.focus >= 120){ p += 18; reasons.push("已经连续专注 " + Math.round(d.focus) + " 分钟"); }
+  else if(d.focus >= 90){ p += 12; reasons.push("连续专注 " + Math.round(d.focus) + " 分钟，快到极限了"); }
+  else if(d.focus >= 60){ p += 6; reasons.push("连续专注 " + Math.round(d.focus) + " 分钟"); }
+  if(d.hour >= 23 || d.hour < 5){ p += 15; reasons.push("现在是 " + d.hour + " 点，已经过了平时睡觉的时间"); }
+  if(d.screen >= 40){ p += 8; reasons.push("过去一小时屏幕亮了 " + Math.round(d.screen) + " 分钟"); }
+  const score = Math.max(5, Math.min(100, 100 - p));
+  const band = score < 40 ? "LOW" : score < 70 ? "MID" : "HIGH";
+  let headline = "状态充足，今天适合干点费脑子的。";
+  if(band === "LOW") headline = "已经撑到边缘了，别再加任务。";
+  else if(band === "MID") headline = "还有余量，但别硬撑了。";
+  if(d.hour >= 23 || d.hour < 5){
+    headline = band === "HIGH" ? "还醒着，但今天该收尾了。" : "这个点还在硬撑，先收尾再睡。";
+  }
+  return {score, band, headline, reasons, hour:d.hour};
+}
+function moodOf(score){ return score < 70 ? "worried" : score >= 85 ? "happy" : "idle"; }
+function moodLabel(m){ return m === "worried" ? "在担心你" : m === "happy" ? "心情不错" : "有点困"; }
+
+/* ---------------- 推荐 ---------------- */
+function recsFor(budget, night, exclude){
+  const hour = data.demo.hour;
+  const lateNight = night || hour >= 23 || hour < 5;
+  let cand = POOL.filter(a => (!budget || a.m <= budget) && !exclude.includes(a.id));
+  if(lateNight) cand = cand.filter(a => ["REST","CALM","FUEL"].includes(a.c));
+  const inLib = /图书馆|教室/.test(S.chatScene || "");
+  if(inLib) cand = cand.filter(a => !["SOCIAL","REST"].includes(a.c));
+  if(cand.length < 3) cand = POOL.filter(a => !exclude.includes(a.id) && (!budget || a.m <= budget));
+  const scored = cand.map(a => {
+    const rs = data.records.filter(r => r.id === a.id);
+    const n = rs.length;
+    const avg = n ? rs.reduce((s,r)=>s+r.rate,0)/n : 0;
+    let v = n ? avg/5 : 0.55;
+    if(n === 0) v += 0.12;
+    v += Math.random()*0.18;
+    return {a, v, n, avg};
+  }).sort((x,y)=>y.v-x.v);
+  return scored.slice(0,3).map(o => {
+    let why;
+    if(o.n === 0) why = "还没试过 · 今天第一次试";
+    else if(o.avg >= 4) why = "你试过 " + o.n + " 次，平均 " + o.avg.toFixed(1) + " 分";
+    else if(o.avg >= 3) why = "试过 " + o.n + " 次，效果一般";
+    else why = "试过 " + o.n + " 次，对你不太管用，换个角度试试";
+    return {...o.a, why};
+  });
+}
+
+/* ---------------- 头像 ---------------- */
+function girl(mood, size){
+  const w = size||76, h = Math.round(w*1.2);
+  const H1 = "#2B4573", H2 = "#3C5F96", H3 = "#5B84BE";
+  // 眼睛：半眯的困眼
+  const eyeOpen = ''
+    + '<ellipse cx="37.5" cy="53" rx="6.1" ry="5.2" fill="#FFFFFF"/>'
+    + '<ellipse cx="37.5" cy="53.6" rx="3.5" ry="4.1" fill="#7FB6EA"/>'
+    + '<circle cx="37.5" cy="54" r="1.6" fill="#2A3B58"/>'
+    + '<circle cx="39.1" cy="51.6" r="0.95" fill="#FFFFFF"/>'
+    + '<path d="M31.4 50.4 q6.1 -2.4 12.2 0" stroke="#E9C9B4" stroke-width="3.1" fill="none" stroke-linecap="round"/>'
+    + '<path d="M31.2 53.2 q6.3 -1.8 12.6 0" stroke="#2A3B58" stroke-width="1.25" fill="none" stroke-linecap="round" opacity=".75"/>'
+    + '<ellipse cx="62.5" cy="53" rx="6.1" ry="5.2" fill="#FFFFFF"/>'
+    + '<ellipse cx="62.5" cy="53.6" rx="3.5" ry="4.1" fill="#7FB6EA"/>'
+    + '<circle cx="62.5" cy="54" r="1.6" fill="#2A3B58"/>'
+    + '<circle cx="64.1" cy="51.6" r="0.95" fill="#FFFFFF"/>'
+    + '<path d="M56.4 50.4 q6.1 -2.4 12.2 0" stroke="#E9C9B4" stroke-width="3.1" fill="none" stroke-linecap="round"/>'
+    + '<path d="M56.2 53.2 q6.3 -1.8 12.6 0" stroke="#2A3B58" stroke-width="1.25" fill="none" stroke-linecap="round" opacity=".75"/>';
+  // 眼睛：开心时弯成月牙
+  const eyeSmile = ''
+    + '<path d="M31.6 54.4 q5.9 -6.4 11.8 0" stroke="#2A3B58" stroke-width="2.5" fill="none" stroke-linecap="round"/>'
+    + '<path d="M56.6 54.4 q5.9 -6.4 11.8 0" stroke="#2A3B58" stroke-width="2.5" fill="none" stroke-linecap="round"/>';
+  const brow = mood === "worried"
+    ? '<path d="M31.4 44.2 q6.2 2.6 12.2 .6" stroke="'+H1+'" stroke-width="2" fill="none" stroke-linecap="round"/>'
+      + '<path d="M56.4 44.8 q6 -2 12.2 -.6" stroke="'+H1+'" stroke-width="2" fill="none" stroke-linecap="round"/>'
+    : '';
+  const mouth = mood === "worried"
+    ? '<path d="M45.5 65.4 q4.5 -3.2 9 0" stroke="#C0746A" stroke-width="2" fill="none" stroke-linecap="round"/>'
+    : mood === "happy"
+      ? '<path d="M45 64.4 q5 4.4 10 0" stroke="#C0746A" stroke-width="2" fill="none" stroke-linecap="round"/>'
+      : '<path d="M46.4 64.8 q3.6 2.2 7.2 0" stroke="#C0746A" stroke-width="1.9" fill="none" stroke-linecap="round"/>';
+  const extra = mood === "worried"
+    ? '<path d="M85 32 q2.4 4.4 0 6.2 q-2.4 -1.8 0 -6.2 z" fill="#8FB6DA"/>'
+    : mood === "happy"
+      ? '<circle cx="86" cy="30" r="3.1" fill="rgba(143,182,218,.6)"/><circle cx="93" cy="39" r="2.1" fill="rgba(143,182,218,.45)"/>'
+      : '<text x="84" y="36" font-size="10" fill="#9CBCD8" font-family="sans-serif" font-weight="600">z</text>'
+        + '<text x="90" y="27" font-size="7.5" fill="#9CBCD8" font-family="sans-serif" font-weight="600">z</text>';
+
+  let s = '<svg class="avatar" width="'+w+'" height="'+h+'" viewBox="0 0 100 120" fill="none">';
+  // 后发
+  s += '<ellipse cx="50" cy="58" rx="31" ry="36" fill="'+H1+'"/>';
+  // 双马尾
+  s += '<path d="M22 46 q-9 12 -7 30 q1.6 12 10 10 q7 -2 5 -13 q-2.5 -14 2 -24 z" fill="'+H2+'"/>';
+  s += '<path d="M78 46 q9 12 7 30 q-1.6 12 -10 10 q-7 -2 -5 -13 q2.5 -14 -2 -24 z" fill="'+H2+'"/>';
+  s += '<path d="M21 56 q-4 12 -2 22" stroke="'+H3+'" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55"/>';
+  s += '<path d="M79 56 q4 12 2 22" stroke="'+H3+'" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55"/>';
+  // 脖子与领口
+  s += '<path d="M43 76 h14 v7 q-7 4 -14 0 z" fill="#EFC7B0"/>';
+  s += '<path d="M33 86 q17 -5 34 0 l3 20 q-20 7 -40 0 z" fill="#FBF8F2"/>';
+  s += '<path d="M50 90 l4.6 5.4 -4.6 5 -4.6 -5 z" fill="#6C9AD6"/>';
+  s += '<path d="M32 92 q18 6 36 0" stroke="#E3DBD0" stroke-width="1.2" fill="none"/>';
+  // 脸
+  s += '<ellipse cx="50" cy="54" rx="23.2" ry="22.6" fill="#FBE0CE"/>';
+  // 刘海
+  s += '<path d="M26 47 C26 27 36 18.5 50 18.5 C64 18.5 74 27 74 47 '
+     + 'C70.5 39 66 35.6 62 43 C58.6 35.4 53.6 39.6 50 32.6 C46.4 39.6 41.4 35.4 38 43 C34 35.6 29.5 39 26 47 Z" fill="'+H2+'"/>';
+  s += '<path d="M33 33 q4.5 -6.5 10 -7.4 q-3.4 5.6 -10 7.4 z" fill="'+H3+'" opacity=".75"/>';
+  s += '<path d="M50 19.5 q2.6 4.4 .4 8" stroke="'+H2+'" stroke-width="2.2" stroke-linecap="round"/>';
+  // 蕾丝头饰（一排小半圆）
+  let frill = '';
+  for (let i = 0; i < 5; i++){
+    const cx = 34 + i*8;
+    frill += '<path d="M'+(cx-4)+' 26 a4 4 0 0 1 8 0 z" fill="#FBF8F2"/>';
+  }
+  s += '<path d="M30 26.6 q20 -7 40 0" stroke="#FBF8F2" stroke-width="3.4" fill="none" stroke-linecap="round"/>';
+  s += frill;
+  // 蝴蝶结
+  s += '<path d="M29 30 q-7 -4 -9 2 q-1 5 6 4 z" fill="#6C9AD6"/>';
+  s += '<path d="M29 30 q7 -4 9 2 q1 5 -6 4 z" fill="#6C9AD6"/>';
+  s += '<circle cx="29" cy="31.4" r="1.9" fill="#4E7FBF"/>';
+  // 五官
+  s += brow + (mood === "happy" ? eyeSmile : eyeOpen) + mouth;
+  s += '<ellipse cx="31.5" cy="59" rx="4.4" ry="2.4" fill="#F0A79E" opacity=".5"/>';
+  s += '<ellipse cx="68.5" cy="59" rx="4.4" ry="2.4" fill="#F0A79E" opacity=".5"/>';
+  s += extra;
+  s += '</svg>';
+  return s;
+}
+
+/* ---------------- 图标 ---------------- */
+const ICON = {
+  pulse:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M2 13h4l2-5 3 10 2.5-6 1.5 3h7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  pool:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="5" cy="6.5" r="1.6" fill="currentColor"/><path d="M9 6.5h11" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="5" cy="12" r="1.6" fill="currentColor"/><path d="M9 12h11" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="5" cy="17.5" r="1.6" fill="currentColor"/><path d="M9 17.5h11" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>',
+  chart:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="12" width="4" height="8" rx="1.2" fill="currentColor"/><rect x="10" y="7" width="4" height="13" rx="1.2" fill="currentColor"/><rect x="17" y="14" width="4" height="6" rx="1.2" fill="currentColor"/></svg>',
+  chat:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 6.5A3.5 3.5 0 0 1 7.5 3h9A3.5 3.5 0 0 1 20 6.5v6A3.5 3.5 0 0 1 16.5 16H10l-5 4v-4.4A3.5 3.5 0 0 1 4 12.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+  person:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.6" stroke="currentColor" stroke-width="1.9"/><path d="M4.5 20c1.4-3.8 4-5.6 7.5-5.6s6.1 1.8 7.5 5.6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>'
+};
+
+/* ---------------- 视图 ---------------- */
+function view(){
+  switch(S.screen){
+    case "rec": return viewRec();
+    case "timer": return viewTimer();
+    case "rate": return viewRate();
+    case "graph": return viewGraph();
+    case "pool": return viewPool();
+    case "chat": return viewChat();
+    case "mine": return viewMine();
+    default: return viewHome();
+  }
+}
+
+function ring(score){
+  const r = 44, c = 2*Math.PI*r, off = c*(1-score/100);
+  const col = score < 40 ? "#BF5B3F" : score < 70 ? "#B0842E" : "#3D5A4A";
+  return '<div class="ring"><svg width="104" height="104" viewBox="0 0 104 104">'
+    + '<circle cx="52" cy="52" r="'+r+'" stroke="#EDE7DD" stroke-width="7.5" fill="none"/>'
+    + '<circle cx="52" cy="52" r="'+r+'" stroke="'+col+'" stroke-width="7.5" fill="none" stroke-linecap="round" stroke-dasharray="'+c+'" stroke-dashoffset="'+off+'"/>'
+    + '</svg><div class="num"><span class="big">'+score+'</span><span class="small">/ 100</span></div></div>';
+}
+
+function viewHome(){
+  const a = assess();
+  const m = moodOf(a.score);
+  const done = data.records.length;
+  const moodColor = m === "worried" ? "#8FB6DA" : m === "happy" ? "#9DC08B" : "#C7BCA9";
+  const bandText = a.band === "LOW" ? "低电量" : a.band === "MID" ? "还有余量" : "状态充足";
+  const note = data.records.length ? data.records[data.records.length-1].id : null;
+  const last = note ? POOL.find(p=>p.id===note) : null;
+  let bubble;
+  if(m === "worried") bubble = "我有点担心你。今天绷得有点久了，让我用五分钟把你捞回来？";
+  else if(m === "happy") bubble = "状态挺好的呀，今天适合干点费脑子的活。";
+  else if(last) bubble = "上次你选了「"+last.t+"」，后来怎么样了？";
+  else bubble = "我在。累的时候叫我一声，五分钟以内的事我都能安排。";
+  return `
+  <div class="top">
+    <div>
+      <div class="brand">回血实验室</div>
+      <div class="sub">${done? "今天 · 已完成 "+done+" 次实验" : "今天 · 还没开始第一次"}</div>
+    </div>
+    <div class="pill">${ICON.pulse} 演示数据</div>
+  </div>
+
+  <div class="card">
+    <div class="hero">
+      ${ring(a.score)}
+      <div>
+        <div class="cap">此刻精力余额</div>
+        <div class="band" style="background:${moodColor}22;color:#4b4b4b;margin-top:6px">
+          <span class="dot" style="background:${moodColor}"></span>${bandText}
+        </div>
+        <div class="headline">${a.headline}</div>
+      </div>
+    </div>
+    <details>
+      <summary>这个分是怎么来的？</summary>
+      <ul class="reasons">${a.reasons.length? a.reasons.map(r=>"<li>"+r+"</li>").join(""):"<li>各项都正常，没有扣分项</li>"}</ul>
+    </details>
+  </div>
+
+  <button class="btn" data-go="rec">撑不住了，找个 5 分钟能做完的</button>
+  <button class="btn ghost" data-go="chat" style="margin-top:10px">说不清也行，说一句就好</button>
+
+  <div class="card" style="margin-top:14px">
+    <div class="row">
+      ${girl(m, 76)}
+      <div style="flex:1">
+        <div class="nameline">小夜<span class="mood">${moodLabel(m)}</span></div>
+        <div class="bubble" style="margin-top:6px">${bubble}</div>
+        <div class="cta" data-go="chat">跟她说两句 →</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid3">
+    <div class="tile" data-go="pool">${ICON.pool}<b>回血池</b><span>${POOL.length} 件小事</span></div>
+    <div class="tile" data-go="graph">${ICON.chart}<b>回血图谱</b><span>哪种最有效</span></div>
+    <div class="tile" data-go="mine">${ICON.person}<b>我的</b><span>数据与说明</span></div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <div class="cap" style="margin-bottom:10px">演示数据（真机上来自手环与系统）</div>
+    ${slider("focus","连续专注", data.demo.focus, 0, 180, "分钟")}
+    ${slider("screen","近一小时屏幕", data.demo.screen, 0, 90, "分钟")}
+    ${slider("hour","现在是几点", data.demo.hour, 0, 23, "点")}
+  </div>
+
+  <div class="foot">网页演示版 · 数据是演示值，不接你的手机。真机版读手环心率与系统使用数据，功能更多。</div>`;
+}
+
+function slider(k,label,v,min,max,unit){
+  return `<div class="sd"><span>${label}</span><span id="v_${k}">${v} ${unit}</span></div>
+  <input class="slider" type="range" min="${min}" max="${max}" value="${v}" data-slider="${k}">`;
+}
+
+function viewRec(){
+  const a = assess();
+  const lateNight = a.hour >= 23 || a.hour < 5;
+  if(!S.recs.length){
+    S.recs = recsFor(null, lateNight, S.excluded);
+  }
+  return `
+  <div class="back" data-go="home">← 回首页</div>
+  <h2>这个状态下，值得试的</h2>
+  <div class="muted" style="margin-bottom:14px">${lateNight? "深夜时段只给能收尾的，不给你要说话的选项。" : "按你的精力和时段筛的，只有五分钟以内的。"}</div>
+  ${S.recs.map(a => `
+    <div class="rec" data-start="${a.id}">
+      <div class="r1">
+        <div class="tag" style="background:${CATS[a.c].bg};color:${CATS[a.c].color}">${CATS[a.c].ch}</div>
+        <div class="t">${a.t}</div>
+        <div class="m">${a.m} 分钟</div>
+      </div>
+      <div class="cue">${a.cue}</div>
+      <div class="why">${a.why}</div>
+    </div>`).join("")}
+  <button class="btn ghost" data-batch="1">换一批</button>
+  <div class="foot">这些选项全部来自你自己的「回血池」，不是凭空生成的。</div>`;
+}
+
+function viewTimer(){
+  const a = S.action;
+  if(!a) return viewHome();
+  const total = a.m*60;
+  const pct = total ? (1 - S.left/total) : 0;
+  const mm = Math.floor(S.left/60), ss = S.left%60;
+  return `
+  <div class="timerwrap">
+    <div class="cap">${CATS[a.c].label}</div>
+    <h2 style="margin:10px 0 4px">${a.t}</h2>
+    <div class="tnum" id="countdown">${String(mm).padStart(2,"0")}:${String(ss).padStart(2,"0")}</div>
+    <div class="tlabel">${a.cue}</div>
+    <div class="bar" style="margin:18px 0 6px"><i id="tbar" style="width:${(pct*100).toFixed(1)}%"></i></div>
+    <div class="muted">这 ${a.m} 分钟里别刷手机。</div>
+  </div>
+  <button class="btn" data-finish="1" style="margin-top:16px">做完了，去打分</button>
+  <button class="btn ghost" data-go="home" style="margin-top:10px" data-cancel="1">先不做了</button>`;
+}
+
+function viewRate(){
+  const a = S.action;
+  return `
+  <div class="back" data-go="home">← 回首页</div>
+  <h2>${a? a.t : ""}<span style="font-size:13px;color:var(--faint);font-weight:400"> · ${a? a.m : ""} 分钟</span></h2>
+  <div class="muted" style="margin-bottom:14px">刚才这件事，对你管用吗？</div>
+  <div class="rates">
+    ${["没用","一般","还行","有用","很管用"].map((t,i)=>`<div class="rate${S.rateSel===i?" sel":""}" data-rate="${i+1}">${t}</div>`).join("")}
+  </div>
+  <button class="btn" data-save="1" ${S.rateSel===undefined?"disabled":""} style="margin-top:16px">记下来</button>`;
+}
+
+function viewGraph(){
+  const rs = data.records;
+  const n = rs.length;
+  const avg = n ? rs.reduce((s,r)=>s+r.rate,0)/n : 0;
+  const eff = n ? rs.filter(r=>r.rate>=4).length/n : 0;
+  const byCat = {};
+  rs.forEach(r=>{ const a=POOL.find(p=>p.id===r.id); if(!a) return; (byCat[a.c]=byCat[a.c]||[]).push(r.rate); });
+  const rows = Object.entries(byCat).map(([c,arr])=>({c, n:arr.length, avg:arr.reduce((s,v)=>s+v,0)/arr.length}))
+    .sort((x,y)=>y.avg-x.avg);
+  const hours = [[6,12,"上午 6-12 点"],[12,18,"下午 12-18 点"],[18,23,"傍晚 18-23 点"],[23,30,"深夜 23-6 点"]];
+  const hstat = hours.map(([s,e,label])=>{
+    const arr = rs.filter(r=>{ let h=r.hour; if(h<6) h+=24; return h>=s && h<e; });
+    return {label, n:arr.length, avg: arr.length? arr.reduce((a,r)=>a+r.rate,0)/arr.length : null};
+  });
+  const last = rs.slice(-1)[0];
+  const lastA = last ? POOL.find(p=>p.id===last.id) : null;
+  return `
+  <h2>回血图谱</h2>
+  <div class="stat">
+    <div><b>${n}</b><span>实验次数</span></div>
+    <div><b>${n? avg.toFixed(1) : "—"}</b><span>平均有效分</span></div>
+    <div><b>${n? Math.round(eff*100)+"%" : "—"}</b><span>觉得有用的比例</span></div>
+    <div><b>${n? Math.min(12, Math.ceil(n/3)) : 0}</b><span>连续天数(演示)</span></div>
+  </div>
+
+  <h3>哪一类对你最有效</h3>
+  <div class="card">
+    ${rows.length? rows.map(r=>`
+      <div style="margin-bottom:12px">
+        <div class="bl"><span>${CATS[r.c].label}</span><span>${r.avg.toFixed(1)} 分 · ${r.n} 次</span></div>
+        <div class="bar"><i style="width:${(r.avg/5*100).toFixed(0)}%"></i></div>
+      </div>`).join("") : '<div class="muted">还没有数据。做一次实验，这里就会开始有东西。</div>'}
+  </div>
+
+  <h3>一天里哪个时段最管用</h3>
+  <div class="card">
+    ${hstat.map(h=>`
+      <div style="margin-bottom:12px">
+        <div class="bl"><span>${h.label}</span><span>${h.avg? h.avg.toFixed(1)+" 分 · "+h.n+" 次" : "还没有实验"}</span></div>
+        ${h.avg? '<div class="bar"><i style="width:'+(h.avg/5*100).toFixed(0)+'%"></i></div>' : ""}
+      </div>`).join("")}
+  </div>
+
+  ${lastA? `<div class="card"><div class="cap">上次</div><div style="font-size:13.5px;margin-top:6px">${lastA.t} · ${last.rate} 分</div></div>` : ""}
+  <div class="foot">样本：这些是演示记录。真机版里组内少于 3 次不排名，避免"试一次就说最有效"。</div>`;
+}
+
+function viewPool(){
+  const cats = ["ALL","MOVE","CALM","SOCIAL","PLAY","REST","FUEL"];
+  const list = POOL.filter(a => S.poolFilter==="ALL" || a.c===S.poolFilter);
+  return `
+  <h2>回血池</h2>
+  <div class="muted" style="margin-bottom:12px">这些是"你本来就愿意做"的事。推荐只会从这里挑。</div>
+  <div class="chips" style="flex-wrap:wrap;overflow:visible">
+    ${cats.map(c=>`<div class="chip" data-filter="${c}" style="${S.poolFilter===c? "background:var(--accent);color:#fff;border-color:var(--accent)":""}">${c==="ALL"?"全部":CATS[c].label}</div>`).join("")}
+  </div>
+  ${list.map(a=>`
+    <div class="rec" data-start="${a.id}">
+      <div class="r1">
+        <div class="tag" style="background:${CATS[a.c].bg};color:${CATS[a.c].color}">${CATS[a.c].ch}</div>
+        <div class="t">${a.t}</div>
+        <div class="m">${a.m} 分钟</div>
+      </div>
+      <div class="cue">${a.cue}</div>
+    </div>`).join("")}
+  <div class="foot">真机版可以增删自己的条目，也能从别的地方导入。</div>`;
+}
+
+function parseIntent(text){
+  const t = text || "";
+  let mood = "OK";
+  if(/麻木|空|没感觉|无聊|提不起|摆烂|没劲|学不进去/.test(t)) mood = "NUMB";
+  else if(/烦|焦虑|慌|压力|紧张|怕|赶不上|来不及/.test(t)) mood = "ANXIOUS";
+  else if(/累|困|撑不住|没力气|疲惫|熬不住|睡不够|打不起精神/.test(t)) mood = "TIRED";
+  let mins = null;
+  const m = t.match(/([0-9]+|[一二三四五六七八九十两半]+)\s*个?\s*(小时|分钟|分)/);
+  if(m){
+    const raw = m[1], unit = m[2];
+    let v;
+    const cn = {"一":1,"二":2,"两":2,"三":3,"四":4,"五":5,"六":6,"七":7,"八":8,"九":9,"十":10,"半":0.5};
+    if(/^[0-9]+$/.test(raw)) v = parseInt(raw,10);
+    else if(raw === "半") v = 0.5;
+    else v = (cn[raw] !== undefined) ? cn[raw] : (raw.length===2 && raw[0]==="十" ? 10+(cn[raw[1]]||0) : null);
+    if(v!==null && v!==undefined) mins = (unit==="小时" ? v*60 : v);
+  }
+  let scene = "";
+  if(/图书馆/.test(t)) scene = "在图书馆";
+  else if(/教室|上课/.test(t)) scene = "在教室";
+  else if(/宿舍|寝室/.test(t)) scene = "在宿舍";
+  else if(/路上|地铁|公交/.test(t)) scene = "在路上";
+  return {mood, mins, scene};
+}
+
+function viewChat(){
+  if(!S.chat){
+    const a = assess();
+    const m = moodOf(a.score);
+    S.chat = [{from:"ai", text: greet(a, m)}];
+  }
+  return `
+  <div class="back" data-go="home">← 回首页</div>
+  <div style="text-align:center;margin-bottom:14px">
+    <div style="font-size:16px;font-weight:600">小夜</div>
+    <div style="font-size:11px;color:var(--faint)">网页演示里她用本地规则回话 · App 里可接你自己的模型</div>
+  </div>
+  <div id="chatbox">
+    ${S.chat.map(t=> t.from==="me"
+      ? '<div class="chatline me"><div class="b">'+esc(t.text)+'</div></div>'
+      : '<div class="chatline ai"><div class="b">'+esc(t.text)+'</div></div>'
+        + (t.recs? t.recs.map(a=>`
+          <div class="rec" data-start="${a.id}" style="margin-left:0">
+            <div class="r1">
+              <div class="tag" style="background:${CATS[a.c].bg};color:${CATS[a.c].color}">${CATS[a.c].ch}</div>
+              <div class="t">${a.t}</div><div class="m">${a.m} 分钟</div>
+            </div>
+          </div>`).join("") : "")
+    ).join("")}
+  </div>
+  <div class="chips">
+    <div class="chip" data-say="有点撑不住">有点撑不住</div>
+    <div class="chip" data-say="还剩十分钟">还剩十分钟</div>
+    <div class="chip" data-say="在图书馆，有点烦">在图书馆，有点烦</div>
+    <div class="chip" data-say="今天好累">今天好累</div>
+  </div>
+  <div class="inputbar">
+    <input id="chatInput" placeholder="说一句你现在的情况…" value="${esc(S.chatInput)}">
+    <button data-send="1">发</button>
+  </div>`;
+}
+
+function greet(a, m){
+  const name = "";
+  if(m === "worried"){
+    return a.hour >= 23 || a.hour < 5
+      ? "还醒着。你现在这个状态，我有点担心，别硬扛到天亮。"
+      : "看你今天绷得不轻。先别急着继续，我们挑一件小事先做。";
+  }
+  if(a.hour >= 23 || a.hour < 5) return "这个点还不睡。撑不住的时候可以来这儿坐会儿。";
+  return "我在。累的时候跟我说一句，五分钟以内的事我都能安排。";
+}
+
+function reply(text){
+  const it = parseIntent(text);
+  S.chatScene = it.scene;
+  const a = assess();
+  const recs = recsFor(it.mins, a.hour>=23||a.hour<5, []);
+  let lead;
+  if(it.mood === "NUMB") lead = "提不起劲的时候，先让身体动一下比讲道理有用。";
+  else if(it.mood === "ANXIOUS") lead = "烦就先别想那件事。我们做一件跟它无关的小事。";
+  else if(it.mood === "TIRED") lead = "累了就是累了，不用撑。";
+  else lead = "嗯，我在听。";
+  if(it.mins) lead += "你说的 " + it.mins + " 分钟以内，我按这个挑的。";
+  if(it.scene) lead += "（" + it.scene + "的话，不给你要说话或者要躺下的选项。）";
+  lead += "下面三个，挑一个，做完回来告诉我管不管用。";
+  return {text: lead, recs};
+}
+
+/* ---------------- 交互 ---------------- */
+const app = document.getElementById("app");
+const nav = document.getElementById("nav");
+
+function render(){
+  app.innerHTML = view();
+  renderNav();
+  bindSliders();
+  window.scrollTo({top:0});
+}
+function renderNav(){
+  const tabs = [["home","今天"],["pool","回血池"],["graph","图谱"],["mine","我的"]];
+  nav.innerHTML = '<div class="in">' + tabs.map(([k,l])=>{
+    const icon = k==="home"?ICON.pulse : k==="pool"?ICON.pool : k==="graph"?ICON.chart : ICON.person;
+    return '<button class="'+(S.screen===k?"on":"")+'" data-go="'+k+'">'+icon+'<span>'+l+'</span></button>';
+  }).join("") + '</div>';
+}
+function bindSliders(){
+  document.querySelectorAll("[data-slider]").forEach(el=>{
+    el.addEventListener("input", e=>{
+      const k = el.getAttribute("data-slider");
+      data.demo[k] = parseInt(e.target.value,10);
+      const unit = k==="hour"?"点":"分钟";
+      const lab = document.getElementById("v_"+k);
+      if(lab) lab.textContent = e.target.value + " " + unit;
+      save();
+      if(k==="hour"){
+        // 时间变化影响档位与文案，重绘但不打断滑块
+        const a = assess();
+        const ringEl = document.querySelector(".ring");
+        if(ringEl){
+          const tmp = document.createElement("div");
+          tmp.innerHTML = ring(a.score);
+          ringEl.replaceWith(tmp.firstChild);
+        }
+      }
+    });
+  });
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+document.addEventListener("click", e=>{
+  const t = e.target.closest("[data-go],[data-start],[data-batch],[data-finish],[data-rate],[data-save],[data-filter],[data-say],[data-send],[data-cancel]");
+  if(!t) return;
+  if(t.hasAttribute("data-go")){
+    stopTimer();
+    const g = t.getAttribute("data-go");
+    if(g==="rec"){ S.recs=[]; S.excluded=[]; S.chatScene=""; }
+    S.screen = g;
+    render();
+  } else if(t.hasAttribute("data-start")){
+    startAction(POOL.find(p=>p.id===t.getAttribute("data-start")));
+  } else if(t.hasAttribute("data-batch")){
+    S.excluded = S.excluded.concat(S.recs.map(r=>r.id));
+    S.recs = recsFor(null, data.demo.hour>=23 || data.demo.hour<5, S.excluded);
+    render();
+  } else if(t.hasAttribute("data-finish")){
+    stopTimer(); S.screen="rate"; S.rateSel=undefined; render();
+  } else if(t.hasAttribute("data-cancel")){
+    stopTimer(); S.screen="home"; render();
+  } else if(t.hasAttribute("data-rate")){
+    S.rateSel = parseInt(t.getAttribute("data-rate"),10); render();
+  } else if(t.hasAttribute("data-save")){
+    const now = new Date();
+    data.records.push({id:S.action.id, rate:S.rateSel, hour:now.getHours(), ts:now.getTime()});
+    save();
+    S.flash = "记下来了。"; S.screen="graph"; S.action=null; render();
+  } else if(t.hasAttribute("data-filter")){
+    S.poolFilter = t.getAttribute("data-filter"); render();
+  } else if(t.hasAttribute("data-say")){
+    sendChat(t.getAttribute("data-say"));
+  } else if(t.hasAttribute("data-send")){
+    const inp = document.getElementById("chatInput");
+    sendChat(inp? inp.value : "");
+  }
+});
+
+function startAction(a){
+  if(!a) return;
+  S.action = a; S.left = a.m*60; S.rateSel = undefined; S.screen="timer"; render();
+  stopTimer();
+  S.timerId = setInterval(()=>{
+    S.left--;
+    if(S.left <= 0){ stopTimer(); S.left=0; S.screen="rate"; S.rateSel=undefined; render(); return; }
+    const c = document.getElementById("countdown");
+    const b = document.getElementById("tbar");
+    if(c) c.textContent = String(Math.floor(S.left/60)).padStart(2,"0")+":"+String(S.left%60).padStart(2,"0");
+    if(b) b.style.width = ((1 - S.left/(S.action.m*60))*100).toFixed(1)+"%";
+  },1000);
+}
+function stopTimer(){ if(S.timerId){ clearInterval(S.timerId); S.timerId=null; } }
+
+function sendChat(text){
+  const v = (text||"").trim();
+  if(!v) return;
+  S.chat.push({from:"me", text:v});
+  const r = reply(v);
+  S.chat.push({from:"ai", text:r.text, recs:r.recs});
+  S.chatInput = "";
+  render();
+  const box = document.getElementById("chatbox");
+  if(box) box.scrollIntoView({block:"end"});
+}
+
+function viewMine(){
+  const n = data.records.length;
+  return `
+  <h2>我的</h2>
+  <div class="card">
+    <div class="row">
+      ${girl("idle", 52)}
+      <div style="flex:1">
+        <div class="nameline">还没登录</div>
+        <div class="muted" style="margin-top:4px">真机版首次启动会让你填一个称呼，她就会这么叫你。</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>数据</h3>
+  <div class="card">
+    <div class="bl"><span>本地记录</span><span>${n} 条</span></div>
+    <div class="bl" style="margin-top:8px"><span>存放位置</span><span>只有这台设备的浏览器里</span></div>
+    <button class="btn ghost" data-go="graph" style="margin-top:12px">看回血图谱</button>
+  </div>
+
+  <h3>这个网页是什么</h3>
+  <div class="card">
+    <div class="bubblecard">
+      这是《回血实验室》的网页演示版，用来在 iPhone、鸿蒙、电脑上直接看核心闭环，不用装 App。<br><br>
+      真机安卓版里这些是真实信号：手环心率（标准蓝牙）、手机连续使用时长、久坐分钟数；还能接你自己的大模型 API，让「小夜」真的跟你对话。<br><br>
+      这里所有数字都是演示值，不会读你的手机。
+    </div>
+  </div>
+
+  <h3>操作</h3>
+  <div class="card">
+    <button class="btn ghost" data-clear="1">清空本地记录</button>
+  </div>
+  <div class="foot">回血实验室 · 网页演示版 v0.1<br>第二十届全国大学生软件创新大赛 · 赛题四 AI＋健康</div>`;
+}
+
+document.addEventListener("click", e=>{
+  if(e.target.closest("[data-clear]")){
+    if(confirm("清空这台设备上的演示记录？")){
+      data.records = []; save();
+      S.screen="home"; render();
+    }
+  }
+});
+
+/* 启动 */
+render();
