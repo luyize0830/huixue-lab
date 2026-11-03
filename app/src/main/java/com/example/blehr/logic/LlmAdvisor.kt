@@ -34,13 +34,12 @@ object LlmReplyParser {
             val ids = JsonLite.readStringArray(obj, "actionIds")
                 .map { it.trim() }.filter { it.isNotEmpty() }
             val minutes = JsonLite.readInt(obj, "minutes")?.takeIf { it in 1..120 }
-            return LlmSuggestion(dropPoolEcho(reply), ids.distinct(), minutes)
+            val clean = dropPoolEcho(reply).takeIf { it.isNotBlank() } ?: return null
+            return LlmSuggestion(clean, ids.distinct(), minutes)
         }
         // 模型没按 JSON 回（真实模型经常这样）：这段就是她想说的那句话。
         // 宁可显示一句人话，也别让用户看到"我没看懂"——那是我的问题，不是他的。
-        val plain = dropPoolEcho(
-            text.trim().trim('{', '}').replace("\"reply\"", "").replace(":", " ").trim()
-        )
+        val plain = dropPoolEcho(text)
         return plain.takeIf { it.isNotEmpty() }?.let { LlmSuggestion(it.take(400), emptyList(), null) }
     }
 
@@ -52,8 +51,7 @@ object LlmReplyParser {
         val lines = reply.lines()
         val kept = lines.filterNot { it.trim().matches(Regex("^[a-z][a-z0-9_]*\\s*\\|.*")) }
         val out = kept.joinToString("\n").trim()
-        // 全被过滤掉（说明模型只回了清单）就别自作聪明，原样返回
-        return out.ifBlank { reply.trim() }
+        return out
     }
 
     /** 只保留真实存在于池子里的 id，顺序按模型给的顺序 */

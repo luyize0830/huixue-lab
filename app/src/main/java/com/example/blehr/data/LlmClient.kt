@@ -3,13 +3,13 @@ package com.example.blehr.data
 import android.content.Context
 import com.example.blehr.logic.ChatContext
 import com.example.blehr.logic.ChatTurn
-import com.example.blehr.logic.JsonLite
 import com.example.blehr.logic.LlmErrors
-import com.example.blehr.logic.LlmReplyParser
+import com.example.blehr.logic.LlmResponse
 import com.example.blehr.logic.LlmSuggestion
 import com.example.blehr.logic.Persona
 import com.example.blehr.model.ActionItem
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
@@ -86,8 +86,7 @@ object LlmConfig {
 }
 
 /**
- * 一次对话请求。任何失败（没网、超时、401、返回不是 JSON）都返回 null，
- * 由界面退回本地规则 —— 用户不该因为模型挂了就用不了。
+ * 一次对话请求。失败带原因退回本地规则，页面取消继续传播。
  */
 object LlmClient {
 
@@ -151,19 +150,17 @@ object LlmClient {
             history = chat.history
         )
 
-        val response = runCatching {
+        val response = try {
             post(LlmConfig.endpoint(ctx), LlmConfig.apiKey(ctx), body)
-        }.getOrElse { e -> return@withContext LlmResult.Fail(LlmErrors.fromException(e)) }
-
-        if (response.code !in 200..299) {
-            return@withContext LlmResult.Fail(LlmErrors.hint(response.code))
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (e: Exception) {
+            return@withContext LlmResult.Fail(LlmErrors.fromException(e))
         }
-
-        // 先从响应里取 message.content，再解析里面那段 JSON
-        val content = JsonLite.readString(response.raw, "content")
-        val suggestion = LlmReplyParser.parse(content)
-            ?: return@withContext LlmResult.Fail(LlmErrors.BAD_REPLY)
-        LlmResult.Ok(suggestion)
+        when (val decoded = LlmResponse.decode(response.code, response.raw)) {
+            is LlmResponse.Result.Ok -> LlmResult.Ok(decoded.suggestion)
+            is LlmResponse.Result.Fail -> LlmResult.Fail(decoded.reason)
+        }
     }
 
     /** 只要结果、不要原因的地方用这个。 */
@@ -178,8 +175,7 @@ object LlmClient {
     }
 
     /**
-     * 接没接上，得能一句话说清。失败时把服务端原话带回来（截断 200 字），
-     * 不要只说"失败" —— 401 和 404 的修法完全不一样。
+     * 使用与正式聊天相同的请求、响应解析与错误映射。
      */
     data class TestResult(val ok: Boolean, val message: String)
 
@@ -189,41 +185,16 @@ object LlmClient {
             val body = "{\"model\":" + quote(model.ifBlank { LlmConfig.DEFAULT_MODEL }) +
                 ",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}]," +
                 "\"max_tokens\":8,\"stream\":false}"
-            runCatching {
-                val url = LlmConfig.endpointOf(baseUrl)
-                val conn = (URL(url).openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    doOutput = true
-                    connectTimeout = CONNECT_TIMEOUT_MS
-                    readTimeout = READ_TIMEOUT_MS
-                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                    setRequestProperty("Authorization", "Bearer ${key.trim()}")
+            try {
+                val response = post(LlmConfig.endpointOf(baseUrl), key, body)
+                when (val decoded = LlmResponse.decode(response.code, response.raw)) {
+                    is LlmResponse.Result.Ok -> TestResult(true, "通了。这个地址和 Key 可以用。")
+                    is LlmResponse.Result.Fail -> TestResult(false, decoded.reason)
                 }
-                conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-                val code = conn.responseCode
-                val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-                val raw = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-                conn.disconnect()
-                if (code in 200..299) {
-                    TestResult(true, "通了。这个地址和 Key 可以用。")
-                } else {
-                    val hint = when (code) {
-                        401 -> "Key 不对，或者这个服务的 Key 不是这种格式。"
-                        402 -> "账户余额不够。"
-                        404 -> "地址不对：应该填到 /v1，不要带 /chat/completions 之外的路径。"
-                        429 -> "请求太频繁，过一会儿再试。"
-                        else -> "服务端返回 $code。"
-                    }
-                    TestResult(false, "$hint 原话：${raw.take(200)}")
-                }
-            }.getOrElse { e ->
-                val why = when (e) {
-                    is java.net.UnknownHostException -> "域名解析不了，检查地址拼写或网络。"
-                    is java.net.SocketTimeoutException -> "连上了但没回应，检查网络或换一个地址。"
-                    is javax.net.ssl.SSLException -> "SSL 握手失败，这个地址可能不是 https。"
-                    else -> e.message ?: e.javaClass.simpleName
-                }
-                TestResult(false, why)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                TestResult(false, LlmErrors.fromException(e))
             }
         }
 

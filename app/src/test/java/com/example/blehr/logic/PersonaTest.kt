@@ -74,6 +74,21 @@ class PersonaTest {
         assertTrue(sys.contains(PersonaPreset.styleOf(PersonaPreset.DEFAULT_ID, null)))
     }
 
+    @Test fun `精简请求也保留自定义性格和必要边界`() {
+        val style = "说话温柔，每次只问一件事。"
+        val sys = Persona.system(23, MascotMood.WORRIED, null, 1, 0, style = style, lite = true)
+        assertTrue(sys.contains(style))
+        assertTrue(sys.contains("不装医生"))
+        assertTrue(sys.contains("是不是 AI"))
+        assertTrue(sys.contains("深夜不挑社交类"))
+        assertFalse(sys.contains("这里有几组对照"))
+    }
+
+    @Test fun `精简请求无自定义时仍保留默认性格`() {
+        val sys = Persona.system(12, MascotMood.IDLE, null, 1, 0, lite = true)
+        assertTrue(sys.contains(PersonaPreset.styleOf(PersonaPreset.DEFAULT_ID, null)))
+    }
+
     @Test
     fun `没记录时不编造实验进度`() {
         val sys = Persona.system(12, MascotMood.IDLE, null, 1, 0)

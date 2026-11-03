@@ -40,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +59,8 @@ import com.example.blehr.data.ProfileRepo
 import com.example.blehr.logic.ChatAdvisor
 import com.example.blehr.logic.ChatContext
 import com.example.blehr.logic.ChatTurn
+import com.example.blehr.logic.ChatReplyQueue
+import com.example.blehr.logic.ReplyBatch
 import com.example.blehr.logic.Humanizer
 import com.example.blehr.logic.IntentParser
 import com.example.blehr.logic.LlmErrors
@@ -70,7 +73,6 @@ import com.example.blehr.logic.Rhythm
 import com.example.blehr.model.ActionItem
 import com.example.blehr.model.EnergyBand
 import com.example.blehr.model.ExperimentRecord
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -190,15 +192,13 @@ fun ChatScreen(
     // ── 回多慢 ────────────────────────────────────────────────────────
     // 对方连发几条时先合并，别每条都抢着回；最后一句像半句话就再多等一会儿。
     // 但等到上限也必须回 —— 陪伴角色沉默比说错话更伤人，这条写死在 ReplyGate 里。
-    var pending by remember { mutableStateOf(listOf<String>()) }
-    var pendingSinceLast by remember { mutableStateOf<Int?>(null) }
-    var lastUserTs by remember { mutableStateOf<Long?>(null) }
-    var busy by remember { mutableStateOf(false) }
-    var batchJob by remember { mutableStateOf<Job?>(null) }
+    var lastUserTs by remember {
+        mutableStateOf(ChatMemory.load(context).lastOrNull { it.fromUser }?.ts)
+    }
 
-    suspend fun respond(merged: String, sinceLast: Int?) {
-        val now = System.currentTimeMillis()
-        val history = ChatMemory.load(context).filter { it.fromUser }
+    suspend fun respond(batch: ReplyBatch) {
+        val merged = batch.text
+        val history = batch.history.filter { it.fromUser }
         val chat = ChatContext(
             hour = hour,
             band = band,
@@ -211,10 +211,10 @@ fun ChatScreen(
             totalRecords = records.size,
             nickname = ProfileRepo.current.nickname,
             style = PersonaStore.style(context),
-            minutesSinceLast = sinceLast,
-            // 注入节流：只在开头和每 4 轮给一次完整人设，其余给一行提醒
+            minutesSinceLast = batch.minutesSinceLast,
+            // 每轮保留身份与性格，每 4 轮补一次完整示例。
             fullInject = ChatMemory.needsFullInject(context),
-            history = ChatMemory.load(context).dropLast(1)
+            history = batch.history
         )
         val outcome = LlmClient.askOutcome(context, merged, pool, chat)
         ChatMemory.bumpInject(context)
@@ -234,7 +234,6 @@ fun ChatScreen(
                 hour = hour,
                 mood = mood
             )
-            thinking = false
             if (parts.isEmpty()) {
                 // 模型啥也没给：不许沉默，兜一句话
                 val fallback = Persona.offlineLine(mood)
@@ -250,7 +249,6 @@ fun ChatScreen(
                         if (index == parts.lastIndex) picked else emptyList()
                     )
                     ChatMemory.append(context, ChatTurn(false, part, System.currentTimeMillis()))
-                    listState.animateScrollToItem(turns.size)
                 }
             }
         } else {
@@ -265,59 +263,41 @@ fun ChatScreen(
                 }
             turns = turns + localFallback
             ChatMemory.append(context, ChatTurn(false, localFallback.text, System.currentTimeMillis()))
-            thinking = false
-            listState.animateScrollToItem(turns.size)
         }
+    }
+
+    val currentRespond = rememberUpdatedState<suspend (ReplyBatch) -> Unit> { respond(it) }
+    val currentMood = rememberUpdatedState(mood)
+    val replyQueue = remember(scope) {
+        ChatReplyQueue(
+            scope = scope,
+            history = { ChatMemory.load(context) },
+            respond = { currentRespond.value(it) },
+            onFailure = {
+                val line = Persona.offlineLine(currentMood.value)
+                turns = turns + Bubble(false, line)
+                ChatMemory.append(context, ChatTurn(false, line, System.currentTimeMillis()))
+            },
+            onBusyChanged = { thinking = it }
+        )
     }
 
     fun send(text: String) {
         val t = text.trim()
         if (t.isEmpty()) return
         val now = System.currentTimeMillis()
-        if (pending.isEmpty()) pendingSinceLast = ReplyGate.minutesSince(lastUserTs, now)
+        val sinceLast = ReplyGate.minutesSince(lastUserTs, now)
         lastUserTs = now
 
         turns = turns + Bubble(true, t)
         input = ""
-        ChatMemory.append(context, ChatTurn(true, t, now))
+        val turn = ChatTurn(true, t, now)
+        ChatMemory.append(context, turn)
         // 用这句当作"上次聊到"，她下次能接上；只存前 24 字，不存整段
         ChatMemory.setNote(context, t.take(24))
         ChatMemory.markTalked(context, now)
 
-        pending = pending + t
-        // 一按发送就进入"正在输入…"，别让等待窗口看起来像没人管
-        thinking = true
-        // 她还在回上一条时先攒着，回完再一口气补上——但绝不会不回
-        if (busy) return
-
-        batchJob?.cancel()
-        batchJob = scope.launch {
-            // 等待窗口里也要让她显得"正在输入"——不然用户看到的是"已读不回"
-            busy = true
-            thinking = true
-            try {
-                delay(ReplyGate.waitMs(pending))
-                while (pending.isNotEmpty()) {
-                    val merged = ReplyGate.merge(pending)
-                    val since = pendingSinceLast
-                    pending = emptyList()
-                    pendingSinceLast = null
-                    respond(merged, since)
-                }
-                // 网络异常之类的意外不能让对话卡死：兜底再回一句
-            } catch (e: Exception) {
-                if (pending.isNotEmpty()) {
-                    val merged = ReplyGate.merge(pending)
-                    pending = emptyList()
-                    val line = Persona.offlineLine(mood)
-                    turns = turns + Bubble(false, line)
-                    ChatMemory.append(context, ChatTurn(false, line, System.currentTimeMillis()))
-                }
-            } finally {
-                busy = false
-                thinking = false
-            }
-        }
+        replyQueue.enqueue(turn, sinceLast)
     }
 
     // 语音走系统识别（RecognizerIntent），App 自己不录音、不要录音权限：

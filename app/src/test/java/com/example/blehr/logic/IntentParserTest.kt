@@ -9,6 +9,21 @@ import org.junit.Test
 
 class IntentParserTest {
 
+    @Test fun `图书馆没有合适候选时也不能退回说话或躺下`() {
+        val intent = IntentParser.parse("在图书馆", 15)
+        val blocked = pool.filter { it.category in setOf(ActionCategory.SOCIAL, ActionCategory.REST) }
+        val reply = ChatAdvisor.reply(intent, com.example.blehr.model.EnergyBand.MID, blocked, emptyList())
+        assertTrue(reply.recommendations.isEmpty())
+    }
+
+    @Test fun `先过滤场景再推荐不会丢掉池中其他合适行动`() {
+        val intent = IntentParser.parse("在图书馆", 15)
+        val candidates = pool + item("water", 1, ActionCategory.FUEL)
+        val reply = ChatAdvisor.reply(intent, com.example.blehr.model.EnergyBand.MID, candidates, emptyList())
+        assertEquals(3, reply.recommendations.size)
+        assertTrue(reply.recommendations.none { it.action.category in setOf(ActionCategory.SOCIAL, ActionCategory.REST) })
+    }
+
     @Test
     fun `累的话识别为疲惫`() {
         val i = IntentParser.parse("我有点撑不住了", 15)

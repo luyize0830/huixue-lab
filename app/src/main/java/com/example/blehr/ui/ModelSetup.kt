@@ -97,7 +97,7 @@ fun ModelSetupScreen(onBack: () -> Unit, onSaved: () -> Unit) {
             Spacer(Modifier.height(6.dp))
             LookField(
                 value = base,
-                onValueChange = { base = it },
+                onValueChange = { base = it; result = null },
                 placeholder = "https://api.deepseek.com/v1",
                 singleLine = true,
                 keyboard = KeyboardType.Uri
@@ -116,7 +116,7 @@ fun ModelSetupScreen(onBack: () -> Unit, onSaved: () -> Unit) {
             Spacer(Modifier.height(6.dp))
             LookField(
                 value = model,
-                onValueChange = { model = it },
+                onValueChange = { model = it; result = null },
                 placeholder = LlmConfig.DEFAULT_MODEL,
                 singleLine = true
             )
@@ -143,7 +143,7 @@ fun ModelSetupScreen(onBack: () -> Unit, onSaved: () -> Unit) {
             Spacer(Modifier.height(6.dp))
             LookField(
                 value = key,
-                onValueChange = { key = it },
+                onValueChange = { key = it; result = null },
                 placeholder = "sk-…",
                 singleLine = true,
                 keyboard = KeyboardType.Password,
@@ -169,9 +169,14 @@ fun ModelSetupScreen(onBack: () -> Unit, onSaved: () -> Unit) {
                     onClick = {
                         testing = true
                         result = null
+                        val testedInput = Triple(base, model, key)
                         scope.launch {
-                            result = LlmClient.test(base, model, key)
-                            testing = false
+                            try {
+                                val tested = LlmClient.test(testedInput.first, testedInput.second, testedInput.third)
+                                if (testedInput == Triple(base, model, key)) result = tested
+                            } finally {
+                                testing = false
+                            }
                         }
                     }
                 )

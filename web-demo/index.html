@@ -165,7 +165,21 @@ let data = load();
 function load(){
   try{
     const raw = localStorage.getItem(KEY);
-    if(raw) return JSON.parse(raw);
+    if(raw){
+      const saved = JSON.parse(raw);
+      if(saved && typeof saved === "object" && !Array.isArray(saved)){
+        const demo = saved.demo || {};
+        const finite = (v, fallback) => Number.isFinite(v) ? v : fallback;
+        const records = Array.isArray(saved.records) ? saved.records.filter(r =>
+          r && typeof r.id === "string" && POOL.some(a => a.id === r.id) &&
+          Number.isInteger(r.rate) && r.rate >= 1 && r.rate <= 5 &&
+          Number.isFinite(r.ts) && Number.isInteger(r.hour) && r.hour >= 0 && r.hour <= 23
+        ) : [];
+        return {records, nudgeOn:typeof saved.nudgeOn === "boolean" ? saved.nudgeOn : true,
+          demo:{focus:Math.max(0,finite(demo.focus,125)), screen:Math.max(0,Math.min(60,finite(demo.screen,45))),
+            hour:Math.max(0,Math.min(23,Math.floor(finite(demo.hour,new Date().getHours()))))}};
+      }
+    }
   }catch(e){}
   return {records:[], nudgeOn:true, demo:{focus:125, screen:45, hour:new Date().getHours()}};
 }
@@ -197,11 +211,13 @@ function moodLabel(m){ return m === "worried" ? "在担心你" : m === "happy" ?
 function recsFor(budget, night, exclude){
   const hour = data.demo.hour;
   const lateNight = night || hour >= 23 || hour < 5;
-  let cand = POOL.filter(a => (!budget || a.m <= budget) && !exclude.includes(a.id));
-  if(lateNight) cand = cand.filter(a => ["REST","CALM","FUEL"].includes(a.c));
+  let cand = POOL.filter(a => (budget == null || a.m <= budget) && !exclude.includes(a.id));
   const inLib = /图书馆|教室/.test(S.chatScene || "");
   if(inLib) cand = cand.filter(a => !["SOCIAL","REST"].includes(a.c));
-  if(cand.length < 3) cand = POOL.filter(a => !exclude.includes(a.id) && (!budget || a.m <= budget));
+  if(lateNight){
+    const quiet = cand.filter(a => ["REST","CALM","FUEL"].includes(a.c));
+    if(quiet.length >= 3) cand = quiet;
+  }
   const scored = cand.map(a => {
     const rs = data.records.filter(r => r.id === a.id);
     const n = rs.length;
@@ -614,7 +630,8 @@ function reply(text){
   else lead = "嗯，我在听。";
   if(it.mins) lead += "你说的 " + it.mins + " 分钟以内，我按这个挑的。";
   if(it.scene) lead += "（" + it.scene + "的话，不给你要说话或者要躺下的选项。）";
-  lead += "下面三个，挑一个，做完回来告诉我管不管用。";
+  lead += recs.length ? "下面 " + recs.length + " 个，挑一个，做完回来告诉我管不管用。"
+    : "按这个条件没剩下合适的了，把时间或条件放宽一点再试试。";
   return {text: lead, recs};
 }
 

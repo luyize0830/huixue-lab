@@ -13,8 +13,8 @@ android {
         applicationId = "com.example.blehr"
         minSdk = 26
         targetSdk = 37
-        versionCode = 23
-        versionName = "0.22"
+        versionCode = 24
+        versionName = "0.23"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -50,6 +50,14 @@ dependencies {
     implementation("androidx.health.connect:connect-client:1.1.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     testImplementation(libs.junit)
+    // Android supplies org.json at runtime; JVM tests need its real implementation.
+    testImplementation("org.json:json:20260814")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+}
+
+// Windows 的非 ASCII 输出路径可能让 Gradle 测试进程找不到类；允许本机单独指定构建目录。
+providers.gradleProperty("huixueBuildDir").orNull?.let {
+    layout.buildDirectory.set(file(it))
 }

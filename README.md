@@ -6,6 +6,21 @@
 
 > 改代码前先看 [`AGENTS.md`](AGENTS.md)：**每次修改后都要跑测试、提交并 push 到 GitHub**（用户 2026-11-03 明确要求），涉及用户可见变化时还要同步 README、`docs/03`–`docs/08`、Release 与桌面交接包。
 
+## v0.23：聊天与模型接入稳定性修复
+
+| 当前版本 | versionCode | JVM 测试 | 网页检查 | debug APK |
+|---|---|---|---|---|
+| 0.23 | 24 | 234 例，28 类，0 失败 | 10 例通过 | 17,720,428 字节 |
+
+- 连接测试与正式聊天共用 `LlmResponse`：200 网页、空正文、错误结构不会再误报成功；修改设置后旧测试结果失效。
+- 精简请求仍发送用户性格、角色身份与边界；每四轮只省略长示例，不再丢失性格。
+- `ChatReplyQueue` 将连发消息从历史中完整剔除；按最新输入等八秒、总合批不超过十四秒；出队后失败仍兜底，页面取消不伪造失败。
+- 只含行动清单的回复走降级；普通文本的时间冒号等标点原样保留。
+- 网页零分钟预算返回空态；安卓与网页候选不足都不绕过图书馆限制；异常本地数据可恢复，保留有效记录。`selftest.js` 现在实际执行页面代码。
+- 关闭系统备份，并在云备份与设备迁移规则中排除 SharedPreferences，覆盖 Key、聊天、档案与实验记录。
+
+验证细节与局限见 [`docs/v0.23-validation.md`](docs/v0.23-validation.md)。本次没有真机、BLE、TTS 或真实模型服务验证；安装包是当前工作机的 debug 签名包，已有安装须核对签名后再覆盖，勿为试包直接卸载有数据的旧版。
+
 ## 当前状态
 
 | 模块 | 状态 | 说明 |
@@ -56,11 +71,11 @@
 
 ## 构建
 
-需要 JDK 17 + Android SDK（compileSdk 37，minSdk 26）。
+需要 JDK 25（与仓库 daemon 配置一致）和 Android SDK Platform 37.0（compileSdk 37，minSdk 26）。
 
 ```bash
-# 命令行构建（Windows，Android Studio 自带 JBR）
-$env:JAVA_HOME="C:\Program Files\Android\Android Studio\jbr"
+# 先将 JAVA_HOME 指向 JDK 25、ANDROID_HOME 指向自己的 SDK
+# Windows：GRADLE_USER_HOME 使用纯英文目录；中文项目可加 -PhuixueBuildDir=<英文输出目录>
 .\gradlew.bat assembleDebug --console=plain
 
 # 单元测试
@@ -102,7 +117,9 @@ app/src/main/java/com/example/blehr/
 
 ## 测试
 
-共 76 个 JVM 单元测试，`.\gradlew.bat testDebugUnitTest` 全绿：
+当前 234 个 JVM 测试与 10 个网页检查，详见上方 v0.23 与验证记录。网页检查运行 `node web-demo/selftest.js`。
+
+以下为早期版本的 76 例覆盖记录：`.\gradlew.bat testDebugUnitTest` 全绿：
 
 - `logic/StateEngineTest.kt`：12 个，各信号扣分档位、缺失降级、档位阈值、五信号全报警 = 25 分
 - `logic/RecommenderTest.kt`：8 个，空池、limit、同档位过滤、Thompson 收敛方向、探索加成、统计口径

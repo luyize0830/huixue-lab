@@ -1,0 +1,27 @@
+{
+  "versionName": "0.23",
+  "versionCode": 24,
+  "date": "2026-11-03",
+  "jvm": {
+    "tests": 234,
+    "failures": 0,
+    "errors": 0
+  },
+  "testClasses": 28,
+  "webChecks": {
+    "tests": 10,
+    "failures": 0
+  },
+  "apk": {
+    "file": "huixue-lab-v0.23-debug.apk",
+    "bytes": 17720428,
+    "sha256": "9fa165f7d88f1030237056a9461468c0136fe1ef09d4f958793473d66224113d"
+  },
+  "deviceValidation": "not performed; no Android device connected",
+  "screenshots": [
+    "web-home.png",
+    "web-zero-budget.png",
+    "web-storage-recovered.png"
+  ],
+  "releasePublication": "not verified; local release assets prepared separately"
+}

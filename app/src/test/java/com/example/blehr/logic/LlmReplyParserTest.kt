@@ -13,6 +13,12 @@ import org.junit.Test
  */
 class LlmReplyParserTest {
 
+    @Test fun `纯清单不能当成回复且普通文本标点不被篡改`() {
+        assertNull(LlmReplyParser.parse("water | 接水\ncold | 洗脸"))
+        assertNull(LlmReplyParser.parse("""{"reply":"water | 接水"}"""))
+        assertEquals("时间是 12:30。", LlmReplyParser.parse("时间是 12:30。")!!.reply)
+    }
+
     private val pool = listOf(
         ActionItem("walk", "动", "下楼走一圈", 5, ActionCategory.MOVE, "下楼，绕楼一圈"),
         ActionItem("breath", "静", "4-7-8 呼吸", 3, ActionCategory.CALM, "吸气4秒"),

@@ -142,18 +142,14 @@ object ChatAdvisor {
             nightMode = intent.lateNight
         )
 
-        var recs = Recommender.recommend(band, pool, records, limit, constraints)
-
-        // 场景过滤：图书馆/教室不能出声、不能躺，把这些行动排到后面
-        if (recs.isNotEmpty()) {
-            val blocked = when (intent.scene) {
-                Scene.LIBRARY, Scene.CLASSROOM -> setOf(ActionCategory.SOCIAL, ActionCategory.REST)
-                Scene.COMMUTE -> setOf(ActionCategory.REST)
-                else -> emptySet()
-            }
-            val preferred = recs.filter { it.action.category !in blocked }
-            if (preferred.isNotEmpty()) recs = preferred
+        // 场景是硬约束：先过滤再采样，候选不足也不能把说话/躺下类重新放回来。
+        val blocked = when (intent.scene) {
+            Scene.LIBRARY, Scene.CLASSROOM -> setOf(ActionCategory.SOCIAL, ActionCategory.REST)
+            Scene.COMMUTE -> setOf(ActionCategory.REST)
+            else -> emptySet()
         }
+        val allowed = pool.filter { it.category !in blocked }
+        val recs = Recommender.recommend(band, allowed, records, limit, constraints)
 
         val sb = StringBuilder()
 
