@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -257,7 +258,7 @@ fun FilterChip(text: String, selected: Boolean, onClick: () -> Unit) {
 // ---------------- 回血池（列表 + 详情） ----------------
 
 @Composable
-fun PoolTab(onOpenDetail: (ActionItem) -> Unit) {
+fun PoolTab(onOpenDetail: (ActionItem) -> Unit, onManage: () -> Unit) {
     var query by remember { mutableStateOf("") }
     var cat by remember { mutableStateOf<ActionCategory?>(null) }
     var dur by remember { mutableStateOf(0) } // 0 全部 / 1 1-2 分钟 / 2 3-4 分钟 / 3 5 分钟+
@@ -273,7 +274,7 @@ fun PoolTab(onOpenDetail: (ActionItem) -> Unit) {
             else -> true
         }
         hitQuery && hitCat && hitDur
-    }
+    }.sortedByDescending { it.id in Repo.snapshot.favorites }
 
     Column(Modifier.fillMaxSize()) {
         Column(
@@ -285,6 +286,7 @@ fun PoolTab(onOpenDetail: (ActionItem) -> Unit) {
             Spacer(Modifier.height(8.dp))
             Text("回血池", fontSize = 26.sp, fontWeight = FontWeight.SemiBold, color = Look.Ink)
             Text("${Repo.pool.size} 件随时能做的小事", fontSize = 12.sp, color = Look.InkSoft)
+            TextButton(onClick = onManage) { Text("新增、编辑与收藏 →") }
             Spacer(Modifier.height(14.dp))
 
             OutlinedTextField(
@@ -360,7 +362,7 @@ private fun PoolRow(a: ActionItem, onClick: () -> Unit) {
         CategoryTag(a.category, size = 34.dp)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(a.title, fontSize = 15.sp, color = Look.Ink)
+            Text((if (a.id in Repo.snapshot.favorites) "★ " else "") + a.title, fontSize = 15.sp, color = Look.Ink)
             Text("${a.category.label} · ${a.minutes} 分钟", fontSize = 11.sp, color = Look.InkSoft)
         }
         Text("›", fontSize = 20.sp, color = Look.InkFaint)
@@ -492,7 +494,7 @@ private fun MiniTag(text: String) {
 fun GraphTab() {
     var range by remember { mutableStateOf(0) } // 0 全部 / 1 近 30 天 / 2 近 7 天
     val records = Repo.records
-    val filtered = remember(records.size, range) {
+    val filtered = remember(records, range) {
         val dayMs = 24L * 60 * 60 * 1000
         val now = System.currentTimeMillis()
         when (range) {
@@ -564,7 +566,7 @@ fun GraphTab() {
         }
         Spacer(Modifier.height(14.dp))
 
-        InsightsSection(records = filtered, pool = Repo.pool)
+        InsightsSection(records = filtered, pool = Repo.allActions)
         Spacer(Modifier.height(24.dp))
     }
 }

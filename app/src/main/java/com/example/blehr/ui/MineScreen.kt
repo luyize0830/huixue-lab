@@ -80,6 +80,7 @@ fun MineScreen(
     llmHasKey: Boolean,
     onToggleLlm: (Boolean) -> Unit,
     onExport: () -> Unit,
+    onOpenBackup: () -> Unit,
     onClearRecords: () -> Unit,
     versionText: String
 ) {
@@ -348,6 +349,9 @@ fun MineScreen(
         // ---- 记录 ----
         Spacer(Modifier.height(20.dp))
         SectionTitle("记录")
+        EntryCard(title = "备份与恢复", subtitle = "保存行动、记录、聊天和偏好，支持导入预览与撤销",
+            chipText = "打开", chipColor = Look.Accent, onClick = onOpenBackup)
+        Spacer(Modifier.height(8.dp))
         EntryCard(
             title = "实验报告",
             subtitle = "把记录汇成一页：按类别、按时段，够样本才给排名",

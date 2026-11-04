@@ -108,7 +108,7 @@ object RecordCsv {
                 .toString().replace('T', ' ')
             val delta = if (r.hrBefore != null && r.hrAfter != null) (r.hrAfter - r.hrBefore).toString() else ""
             sb.append(cell(time)).append(',')
-                .append(cell(titleOf[r.actionId] ?: r.actionId)).append(',')
+                .append(cell(r.actionSnapshot?.title ?: titleOf[r.actionId] ?: r.actionId)).append(',')
                 .append(cell(bandLabel(r.band))).append(',')
                 .append(r.hrBefore ?: "").append(',')
                 .append(r.hrAfter ?: "").append(',')

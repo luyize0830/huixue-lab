@@ -7,18 +7,32 @@ import com.example.blehr.model.EnergyBand
 import com.example.blehr.model.ExperimentRecord
 import org.json.JSONArray
 import org.json.JSONObject
+import com.example.blehr.logic.LabData
+import com.example.blehr.logic.LabCodec
 
 /**
- * 极简本地存储：SharedPreferences + JSON。
- *
- * 选型理由（写进技术研究报告）：本项目数据量小（每人每天几条实验记录），
- * 用 Room 属于过度设计；SharedPreferences 存 JSON 足够，且**全部数据留在本机**，
- * 天然满足"数据不上云、可一键删除"的隐私要求。
+ * One atomic business snapshot; legacy records/pool migrate only after a successful commit.
+ * User documents and cross-device backups are managed separately by BackupManager.
  */
 class Store(context: Context) {
 
     private val sp = context.applicationContext
         .getSharedPreferences("huixue_lab", Context.MODE_PRIVATE)
+
+    fun load(defaults: List<ActionItem>): LabData {
+        sp.getString("snapshot_v2", null)?.let { return LabCodec.decode(JSONObject(it)) }
+        val actions = loadPool() ?: defaults
+        val records = loadRecords().map { r -> r.copy(actionSnapshot = actions.firstOrNull { it.id == r.actionId }) }
+        return LabData(actions, records).also(::save)
+    }
+
+    /** One committed value keeps records, catalog and active session consistent after process death. */
+    fun save(data: LabData) {
+        val json = LabCodec.encode(data)
+        LabCodec.decode(json) // Never persist a snapshot which the next launch cannot read.
+        check(sp.edit().putString("snapshot_v2", json.toString())
+            .remove(KEY_RECORDS).remove(KEY_POOL).commit()) { "保存失败，请检查手机可用空间后重试" }
+    }
 
     // ---------------- 实验记录 ----------------
 
@@ -29,35 +43,19 @@ class Store(context: Context) {
             (0 until arr.length()).mapNotNull { i ->
                 val o = arr.optJSONObject(i) ?: return@mapNotNull null
                 val rating = o.optInt("rating", 0)
-                if (rating <= 0) return@mapNotNull null
+                if (rating !in 1..5) return@mapNotNull null
+                if (o.optString("actionId").isBlank() || o.optString("actionId").length > 100) return@mapNotNull null
                 ExperimentRecord(
                     actionId = o.optString("actionId"),
                     band = runCatching { EnergyBand.valueOf(o.optString("band")) }
                         .getOrElse { EnergyBand.MID },
-                    hrBefore = if (o.isNull("hrBefore")) null else o.optInt("hrBefore"),
-                    hrAfter = if (o.isNull("hrAfter")) null else o.optInt("hrAfter"),
+                    hrBefore = if (o.isNull("hrBefore")) null else o.optInt("hrBefore").takeIf { it in 1..300 },
+                    hrAfter = if (o.isNull("hrAfter")) null else o.optInt("hrAfter").takeIf { it in 1..300 },
                     rating = rating,
-                    ts = o.optLong("ts")
+                    ts = o.optLong("ts").coerceAtLeast(0)
                 )
             }
         }.getOrElse { emptyList() }
-    }
-
-    fun saveRecords(list: List<ExperimentRecord>) {
-        val arr = JSONArray()
-        list.forEach { r ->
-            arr.put(
-                JSONObject().apply {
-                    put("actionId", r.actionId)
-                    put("band", r.band.name)
-                    put("hrBefore", r.hrBefore ?: JSONObject.NULL)
-                    put("hrAfter", r.hrAfter ?: JSONObject.NULL)
-                    put("rating", r.rating)
-                    put("ts", r.ts)
-                }
-            )
-        }
-        sp.edit().putString(KEY_RECORDS, arr.toString()).apply()
     }
 
     // ---------------- 回血池（用户自定义行动） ----------------
@@ -77,29 +75,8 @@ class Store(context: Context) {
                         .getOrElse { ActionCategory.PLAY },
                     cue = o.optString("cue", "")
                 )
-            }.filter { it.id.isNotEmpty() && it.title.isNotEmpty() }
+            }.filter { runCatching { LabCodec.action(LabCodec.actionJson(it)) }.isSuccess }.distinctBy { it.id }
         }.getOrElse { null }
-    }
-
-    fun savePool(list: List<ActionItem>) {
-        val arr = JSONArray()
-        list.forEach { a ->
-            arr.put(
-                JSONObject().apply {
-                    put("id", a.id)
-                    put("emoji", a.emoji)
-                    put("title", a.title)
-                    put("minutes", a.minutes)
-                    put("category", a.category.name)
-                    put("cue", a.cue)
-                }
-            )
-        }
-        sp.edit().putString(KEY_POOL, arr.toString()).apply()
-    }
-
-    fun clearRecords() {
-        sp.edit().remove(KEY_RECORDS).apply()
     }
 
     private companion object {

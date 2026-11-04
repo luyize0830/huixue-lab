@@ -54,6 +54,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.example.blehr.data.SessionClock
+import com.example.blehr.logic.ActionSession
+import com.example.blehr.logic.SessionPhase
+import android.os.SystemClock
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -135,7 +140,14 @@ sealed class Screen {
     object Login : Screen()
     object Persona : Screen()
     object Music : Screen()
+    object ActionManager : Screen()
+    object Backup : Screen()
 }
+
+private fun restoredScreen(): Screen = Repo.session?.let { s ->
+    if (s.phase == SessionPhase.FEEDBACK) Screen.Feedback(s.action, s.hrBefore)
+    else Screen.Timer(s.action, if (s.paired) s.startedAt else null)
+} ?: Screen.Home
 
 @Composable
 fun HuixueApp(
@@ -160,12 +172,17 @@ fun HuixueApp(
     // 音乐页可能从首页"压力"卡进来，也可能从「我的」进来；返回键回哪儿要看来源
     var musicFromHome by remember { mutableStateOf(false) }
     var screen by remember {
-        mutableStateOf<Screen>(if (ProfileRepo.current.signedIn || ProfileStore.seen(ctx)) Screen.Home else Screen.Login)
+        mutableStateOf<Screen>(if (Repo.session != null) restoredScreen()
+            else if (ProfileRepo.current.signedIn || ProfileStore.seen(ctx)) Screen.Home else Screen.Login)
     }
+    var leaveSession by remember { mutableStateOf(false) }
+    var operationError by remember { mutableStateOf<String?>(null) }
+    fun perform(block: () -> Unit) { runCatching(block).onFailure { operationError = it.message ?: "保存失败，请重试" } }
 
     // 系统返回键：在子页面里回首页，而不是直接把 App 关掉（答辩现场最容易踩到）
     BackHandler(enabled = screen != Screen.Home) {
-        screen = when (screen) {
+        if (screen is Screen.Timer || screen is Screen.Feedback) leaveSession = true
+        else screen = when (screen) {
             is Screen.Scan -> Screen.Mine
             is Screen.Report -> Screen.Mine
             is Screen.Detail -> Screen.Pool
@@ -174,6 +191,8 @@ fun HuixueApp(
             is Screen.Login -> if (loginEdit) Screen.Mine else Screen.Home
             is Screen.Persona -> Screen.Mine
             is Screen.Music -> if (musicFromHome) Screen.Home else Screen.Mine
+            is Screen.ActionManager -> Screen.Pool
+            is Screen.Backup -> Screen.Mine
             else -> Screen.Home
         }
     }
@@ -271,6 +290,13 @@ fun HuixueApp(
         sedentaryMinutes = activity.stillMinutes
     )
     val assessment = StateEngine.assess(snapshot)
+    fun startAction(action: ActionItem, pairStart: Long? = null) {
+        perform {
+            if (Repo.session == null) Repo.setSession(ActionSession.start(action, assessment.band, heartRate,
+                System.currentTimeMillis(), SystemClock.elapsedRealtime(), SessionClock.boot(ctx), pairStart))
+            screen = restoredScreen()
+        }
+    }
 
     // 压力/情绪：有手环就靠 RMSSD，没有就只用行为线索，并在界面上如实标成"估的"
     val stress = StressEngine.assess(
@@ -333,6 +359,11 @@ fun HuixueApp(
                 .statusBarsPadding()
                 .navigationBarsPadding()
         ) {
+            if (Repo.session != null && screen !is Screen.Timer && screen !is Screen.Feedback && screen != Screen.Backup) {
+                TextButton(onClick = { screen = restoredScreen() }, modifier = Modifier.fillMaxWidth()) {
+                    Text("继续：${Repo.session!!.action.title} · 进度已保存")
+                }
+            }
             Box(Modifier.weight(1f).fillMaxWidth()) {
             when (val s = screen) {
                 is Screen.Home -> HomeScreen(
@@ -377,7 +408,7 @@ fun HuixueApp(
                     pool = Repo.pool,
                     records = Repo.records,
                     hour = hour,
-                    onPick = { action -> screen = Screen.Timer(action) },
+                    onPick = { action -> startAction(action) },
                     onBack = { screen = Screen.Home }
                 )
 
@@ -390,7 +421,7 @@ fun HuixueApp(
                     onEditPersona = { screen = Screen.Persona },
                     onOpenSetup = { screen = Screen.ModelSetup },
                     voiceEnabled = voiceOn,
-                    onPick = { action -> screen = Screen.Timer(action) },
+                    onPick = { action -> startAction(action) },
                     onBack = { screen = Screen.Home }
                 )
 
@@ -399,15 +430,15 @@ fun HuixueApp(
                     pairStartMs = s.pairStartMs,
                     heartRate = heartRate,
                     onFinish = { before ->
-                        screen = Screen.Feedback(s.action, before)
+                        perform { Repo.finishSession(); screen = Screen.Feedback(s.action, before) }
                     },
-                    onCancel = { screen = Screen.Home }
+                    onCancel = { perform { Repo.setSession(null); screen = Screen.Home } }
                 )
 
                 is Screen.Join -> JoinScreen(
                     pool = Repo.pool,
                     onJoined = { action, startAt ->
-                        screen = Screen.Timer(action, startAt)
+                        startAction(action, startAt)
                     },
                     onBack = { screen = Screen.Mine }
                 )
@@ -479,14 +510,15 @@ fun HuixueApp(
                         LlmConfig.setEnabled(ctx, v)
                     },
                     onOpenSetup = { screen = Screen.ModelSetup },
-                    onExport = { shareCsv(ctx, Repo.records, Repo.pool) },
-                    onClearRecords = { Repo.clearRecords() },
+                    onExport = { shareCsv(ctx, Repo.records, Repo.allActions) },
+                    onOpenBackup = { screen = Screen.Backup },
+                    onClearRecords = { perform { Repo.clearRecords() } },
                     versionText = versionText
                 )
 
                 is Screen.Report -> ReportScreen(
                     records = Repo.records,
-                    pool = Repo.pool,
+                    pool = Repo.allActions,
                     onBack = { screen = Screen.Mine }
                 )
 
@@ -519,16 +551,22 @@ fun HuixueApp(
                     heartRate = heartRate,
                     band = assessment.band,
                     onSaved = { screen = Screen.Home },
-                    onSkip = { screen = Screen.Home }
+                    onSkip = { perform { Repo.setSession(null); screen = Screen.Home } }
                 )
 
                 is Screen.Graph -> GraphTab()
 
-                is Screen.Pool -> PoolTab(onOpenDetail = { screen = Screen.Detail(it) })
+                is Screen.Pool -> PoolTab(onOpenDetail = { screen = Screen.Detail(it) }, onManage = { screen = Screen.ActionManager })
+                is Screen.ActionManager -> ActionManagerScreen { screen = Screen.Pool }
+                is Screen.Backup -> BackupScreen(onBack = { screen = Screen.Mine }, onRestored = {
+                    voiceOn = VoiceSettings.enabled(ctx)
+                    charPending = null
+                    if (Reminders.isEnabled(ctx)) NudgeScheduler.start(ctx) else NudgeScheduler.stop(ctx)
+                })
 
                 is Screen.Detail -> ActionDetailScreen(
                     action = s.action,
-                    onStart = { screen = Screen.Timer(s.action) },
+                    onStart = { startAction(s.action) },
                     onBack = { screen = Screen.Pool }
                 )
             }
@@ -554,6 +592,14 @@ fun HuixueApp(
                 )
             }
         }
+        if (leaveSession) AlertDialog(onDismissRequest = { leaveSession = false },
+            title = { Text("回到首页？") },
+            text = { Text("这次行动的计时或待反馈进度会保留，你可以从首页继续。") },
+            confirmButton = { TextButton({ leaveSession = false; screen = Screen.Home }) { Text("保留并返回") } },
+            dismissButton = { TextButton({ leaveSession = false }) { Text("留在这里") } })
+        operationError?.let { message -> AlertDialog(onDismissRequest = { operationError = null },
+            title = { Text("操作未完成") }, text = { Text(message) },
+            confirmButton = { TextButton({ operationError = null }) { Text("知道了") } }) }
     }
 }
 
@@ -1298,21 +1344,21 @@ private fun TimerScreen(
 ) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
+    val session = Repo.session ?: return
     val total = action.minutes * 60
-    var secondsLeft by remember {
-        mutableStateOf(
-            pairStartMs?.let { Pairing.remainingSeconds(action.minutes, it, System.currentTimeMillis()) }
-                ?: total
-        )
-    }
+    var secondsLeft by remember(session.id) { mutableStateOf(SessionClock.remaining(context, session)) }
+    var confirmCancel by remember { mutableStateOf(false) }
+    var timerError by remember { mutableStateOf<String?>(null) }
     // 陪练码：什么时候点都能生成，用的都是"真正的开始时刻"，所以晚一分钟拉人也能对齐
     var pairCode by remember { mutableStateOf<String?>(null) }
-    val hrAtStart = remember { heartRate }
+    val hrAtStart = session.hrBefore
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(session.id, session.phase) {
+        secondsLeft = SessionClock.remaining(context, session)
+        if (session.phase != SessionPhase.RUNNING) return@LaunchedEffect
         while (secondsLeft > 0) {
-            delay(1000)
-            secondsLeft -= 1
+            delay(250)
+            secondsLeft = SessionClock.remaining(context, session)
         }
         vibrate(context, 900)
         onFinish(hrAtStart)
@@ -1335,6 +1381,14 @@ private fun TimerScreen(
             "%02d:%02d".format(secondsLeft / 60, secondsLeft % 60),
             fontSize = 64.sp, fontWeight = FontWeight.Bold, color = Mint
         )
+        Text(if (session.phase == SessionPhase.PAUSED) "已暂停 · 进度已保存" else "计时已保存，切后台或重开后可继续", fontSize = 12.sp, color = TextDim)
+        if (!session.paired) TextButton(onClick = {
+            runCatching {
+                val now = System.currentTimeMillis(); val elapsed = SystemClock.elapsedRealtime(); val boot = SessionClock.boot(context)
+                Repo.setSession(if (session.phase == SessionPhase.PAUSED) session.resume(now, elapsed, boot) else session.pause(now, elapsed, boot))
+            }.onFailure { timerError = it.message ?: "保存失败，请重试" }
+        }) { Text(if (session.phase == SessionPhase.PAUSED) "继续计时" else "暂停") }
+        timerError?.let { Text(it, color = Rose, fontSize = 12.sp) }
         Spacer(Modifier.height(18.dp))
         Bar(1f - secondsLeft.toFloat() / total, Mint, 10)
         Spacer(Modifier.height(14.dp))
@@ -1392,8 +1446,12 @@ private fun TimerScreen(
         ) {
             Text("我好了，现在就结束")
         }
-        TextButton(onClick = onCancel) { Text("取消这次实验", color = TextDim) }
+        TextButton(onClick = { confirmCancel = true }) { Text("取消这次实验", color = TextDim) }
     }
+    if (confirmCancel) AlertDialog(onDismissRequest = { confirmCancel = false },
+        title = { Text("取消这次行动？") }, text = { Text("取消后不会记录反馈，已保存的其他实验不会改变。") },
+        confirmButton = { TextButton({ confirmCancel = false; onCancel() }) { Text("确认取消") } },
+        dismissButton = { TextButton({ confirmCancel = false }) { Text("继续行动") } })
 }
 
 private fun vibrate(context: Context, ms: Long) {
@@ -1419,7 +1477,8 @@ private fun FeedbackScreen(
     onSaved: () -> Unit,
     onSkip: () -> Unit
 ) {
-    var rating by remember { mutableStateOf(0) }
+    var rating by rememberSaveable(Repo.session?.id) { mutableStateOf(0) }
+    var saveError by remember { mutableStateOf<String?>(null) }
     val delta = if (hrBefore != null && heartRate != null) heartRate - hrBefore else null
 
     Column(
@@ -1481,17 +1540,9 @@ private fun FeedbackScreen(
         Spacer(Modifier.height(24.dp))
         Button(
             onClick = {
-                Repo.addRecord(
-                    ExperimentRecord(
-                        actionId = action.id,
-                        band = band,
-                        hrBefore = hrBefore,
-                        hrAfter = heartRate,
-                        rating = rating,
-                        ts = System.currentTimeMillis()
-                    )
-                )
-                onSaved()
+                runCatching { Repo.saveFeedback(rating, heartRate, System.currentTimeMillis()) }
+                    .onSuccess { onSaved() }
+                    .onFailure { saveError = it.message ?: "保存失败，请重试" }
             },
             enabled = rating > 0,
             modifier = Modifier.fillMaxWidth().height(54.dp),
@@ -1499,6 +1550,7 @@ private fun FeedbackScreen(
         ) {
             Text(if (rating == 0) "先选一个感受" else "记下来", fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
+        saveError?.let { Text(it, color = Rose) }
         TextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) {
             Text("这次不记录", color = TextDim, fontSize = 13.sp)
         }

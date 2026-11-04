@@ -107,6 +107,10 @@
   .sd{display:flex;justify-content:space-between;font-size:11px;color:var(--dim)}
   .category-art{display:block;width:100%;height:100%;object-fit:contain}
   .brand-icon{width:28px;height:28px;border-radius:8px;vertical-align:middle;margin-right:8px}
+  .action-editor label{display:block;font-size:12px;color:var(--dim);margin:18px 0}
+  .action-editor input,.action-editor textarea,.action-editor select{display:block;width:100%;margin-top:8px;padding:12px;border:1px solid var(--hair);border-radius:12px;background:var(--card);color:var(--ink);font:inherit;font-size:14px}
+  .action-editor textarea{min-height:106px;resize:vertical;line-height:1.6}
+  .action-editor input:focus,.action-editor textarea:focus,.action-editor select:focus{outline:2px solid var(--olive);outline-offset:2px}
 </style>
 <link rel="icon" href="assets/art-v024/app-icon.webp" type="image/webp">
 </head>
@@ -124,7 +128,7 @@ const CATS = {
   FUEL:{label:"吃点喝点",ch:"吃",color:"#4A87C4",bg:"rgba(74,135,196,.12)"}
 };
 
-const POOL = [
+const DEFAULT_POOL = [
   {id:"walk",t:"下楼走一圈",m:5,c:"MOVE",cue:"别带手机，就绕楼走一圈。"},
   {id:"stairs",t:"爬两层楼梯",m:3,c:"MOVE",cue:"上两层再下来，别坐电梯。"},
   {id:"stretch",t:"站起来伸个懒腰",m:2,c:"MOVE",cue:"手举过头顶，停五秒再放下。"},
@@ -153,6 +157,7 @@ const POOL = [
   {id:"nuts",t:"吃点坚果",m:2,c:"FUEL",cue:"一小把就够。"}
 ];
 
+let POOL = DEFAULT_POOL.map(a=>({...a}));
 const KEY="huixue_web_v1";
 let S = {
   screen:"home",
@@ -166,25 +171,8 @@ let S = {
 let data = load();
 
 function load(){
-  try{
-    const raw = localStorage.getItem(KEY);
-    if(raw){
-      const saved = JSON.parse(raw);
-      if(saved && typeof saved === "object" && !Array.isArray(saved)){
-        const demo = saved.demo || {};
-        const finite = (v, fallback) => Number.isFinite(v) ? v : fallback;
-        const records = Array.isArray(saved.records) ? saved.records.filter(r =>
-          r && typeof r.id === "string" && POOL.some(a => a.id === r.id) &&
-          Number.isInteger(r.rate) && r.rate >= 1 && r.rate <= 5 &&
-          Number.isFinite(r.ts) && Number.isInteger(r.hour) && r.hour >= 0 && r.hour <= 23
-        ) : [];
-        return {records, nudgeOn:typeof saved.nudgeOn === "boolean" ? saved.nudgeOn : true,
-          demo:{focus:Math.max(0,finite(demo.focus,125)), screen:Math.max(0,Math.min(60,finite(demo.screen,45))),
-            hour:Math.max(0,Math.min(23,Math.floor(finite(demo.hour,new Date().getHours()))))}};
-      }
-    }
-  }catch(e){}
-  return {records:[], nudgeOn:true, demo:{focus:125, screen:45, hour:new Date().getHours()}};
+  try{ const raw=localStorage.getItem(KEY); if(raw) return parseWebData(JSON.parse(raw),false); }catch(e){}
+  return parseWebData({},false);
 }
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(data)); }catch(e){} }
 
@@ -214,7 +202,7 @@ function moodLabel(m){ return m === "worried" ? "在担心你" : m === "happy" ?
 function recsFor(budget, night, exclude){
   const hour = data.demo.hour;
   const lateNight = night || hour >= 23 || hour < 5;
-  let cand = POOL.filter(a => (budget == null || a.m <= budget) && !exclude.includes(a.id));
+  let cand = POOL.filter(a => !data.archived.includes(a.id) && (budget == null || a.m <= budget) && !exclude.includes(a.id));
   const inLib = /图书馆|教室/.test(S.chatScene || "");
   if(inLib) cand = cand.filter(a => !["SOCIAL","REST"].includes(a.c));
   if(lateNight){
@@ -269,6 +257,8 @@ function view(){
     case "pool": return viewPool();
     case "chat": return viewChat();
     case "mine": return viewMine();
+    case "edit": return viewActionEditor();
+    case "backup": return viewBackup();
     default: return viewHome();
   }
 }
@@ -329,7 +319,7 @@ function viewHome(){
       ${girl(m, 104)}
       <div style="flex:1">
         <div class="nameline">小夜<span class="mood">${moodLabel(m)}</span></div>
-        <div class="bubble" style="margin-top:6px">${bubble}</div>
+        <div class="bubble" style="margin-top:6px">${esc(bubble)}</div>
         <div class="cta" data-go="chat">跟她说两句 →</div>
       </div>
     </div>
@@ -370,43 +360,36 @@ function viewRec(){
     <div class="rec" data-start="${a.id}">
       <div class="r1">
         <div class="tag" style="background:${CATS[a.c].bg};color:${CATS[a.c].color}">${categoryArt(a.c)}</div>
-        <div class="t">${a.t}</div>
+        <div class="t">${esc(a.t)}</div>
         <div class="m">${a.m} 分钟</div>
       </div>
-      <div class="cue">${a.cue}</div>
-      <div class="why">${a.why}</div>
+      <div class="cue">${esc(a.cue)}</div>
+      <div class="why">${esc(a.why)}</div>
     </div>`).join("")}
   <button class="btn ghost" data-batch="1">换一批</button>
   <div class="foot">这些选项全部来自你自己的「回血池」，不是凭空生成的。</div>`;
 }
 
 function viewTimer(){
-  const a = S.action;
-  if(!a) return viewHome();
-  const total = a.m*60;
-  const pct = total ? (1 - S.left/total) : 0;
-  const mm = Math.floor(S.left/60), ss = S.left%60;
-  return `
-  <div class="timerwrap">
-    <div class="cap">${CATS[a.c].label}</div>
-    <h2 style="margin:10px 0 4px">${a.t}</h2>
-    <div class="tnum" id="countdown">${String(mm).padStart(2,"0")}:${String(ss).padStart(2,"0")}</div>
-    <div class="tlabel">${a.cue}</div>
-    <div class="bar" style="margin:18px 0 6px"><i id="tbar" style="width:${(pct*100).toFixed(1)}%"></i></div>
-    <div class="muted">这 ${a.m} 分钟里别刷手机。</div>
-  </div>
-  <button class="btn" data-finish="1" style="margin-top:16px">做完了，去打分</button>
-  <button class="btn ghost" data-go="home" style="margin-top:10px" data-cancel="1">先不做了</button>`;
+  const session=data.session;if(!session) return viewHome();
+  const a=session.action;const left=webRemaining(session);const pct=1-left/(a.m*60);
+  return `<div class="timerwrap"><div class="cap">${CATS[a.c].label}</div><h2>${esc(a.t)}</h2>
+  <div class="tnum" id="countdown">${String(Math.floor(left/60)).padStart(2,'0')}:${String(left%60).padStart(2,'0')}</div>
+  <div class="tlabel">${esc(a.cue)}</div><div class="bar"><i id="tbar" style="width:${pct*100}%"></i></div>
+  <p class="muted">${session.phase==='PAUSED'?'已暂停':'进度已保存，切后台或刷新后可继续'}</p></div>
+  <button class="btn ghost" data-pause-session="1">${session.phase==='PAUSED'?'继续计时':'暂停'}</button>
+  <button class="btn" data-finish="1" style="margin-top:12px">做完了，去打分</button>
+  <button class="btn ghost" data-cancel="1">取消这次行动</button>`;
 }
 
 function viewRate(){
   const a = S.action;
   return `
   <div class="back" data-go="home">← 回首页</div>
-  <h2>${a? a.t : ""}<span style="font-size:13px;color:var(--faint);font-weight:400"> · ${a? a.m : ""} 分钟</span></h2>
+  <h2>${a? esc(a.t) : ""}<span style="font-size:13px;color:var(--faint);font-weight:400"> · ${a? a.m : ""} 分钟</span></h2>
   <div class="muted" style="margin-bottom:14px">刚才这件事，对你管用吗？</div>
   <div class="rates">
-    ${["没用","一般","还行","有用","很管用"].map((t,i)=>`<div class="rate${S.rateSel===i?" sel":""}" data-rate="${i+1}">${t}</div>`).join("")}
+    ${["没用","一般","还行","有用","很管用"].map((t,i)=>`<div class="rate${S.rateSel===i+1?" sel":""}" data-rate="${i+1}">${t}</div>`).join("")}
   </div>
   <button class="btn" data-save="1" ${S.rateSel===undefined?"disabled":""} style="margin-top:16px">记下来</button>`;
 }
@@ -417,7 +400,7 @@ function viewGraph(){
   const avg = n ? rs.reduce((s,r)=>s+r.rate,0)/n : 0;
   const eff = n ? rs.filter(r=>r.rate>=4).length/n : 0;
   const byCat = {};
-  rs.forEach(r=>{ const a=POOL.find(p=>p.id===r.id); if(!a) return; (byCat[a.c]=byCat[a.c]||[]).push(r.rate); });
+  rs.forEach(r=>{ const a=r.action||POOL.find(p=>p.id===r.id); if(!a) return; (byCat[a.c]=byCat[a.c]||[]).push(r.rate); });
   const rows = Object.entries(byCat).map(([c,arr])=>({c, n:arr.length, avg:arr.reduce((s,v)=>s+v,0)/arr.length}))
     .sort((x,y)=>y.avg-x.avg);
   const hours = [[6,12,"上午 6-12 点"],[12,18,"下午 12-18 点"],[18,23,"傍晚 18-23 点"],[23,30,"深夜 23-6 点"]];
@@ -426,7 +409,7 @@ function viewGraph(){
     return {label, n:arr.length, avg: arr.length? arr.reduce((a,r)=>a+r.rate,0)/arr.length : null};
   });
   const last = rs.slice(-1)[0];
-  const lastA = last ? POOL.find(p=>p.id===last.id) : null;
+  const lastA = last ? (last.action||POOL.find(p=>p.id===last.id)) : null;
   return `
   <h2>回血图谱</h2>
   <div class="stat">
@@ -454,29 +437,25 @@ function viewGraph(){
       </div>`).join("")}
   </div>
 
-  ${lastA? `<div class="card"><div class="cap">上次</div><div style="font-size:13.5px;margin-top:6px">${lastA.t} · ${last.rate} 分</div></div>` : ""}
+  ${lastA? `<div class="card"><div class="cap">上次</div><div style="font-size:13.5px;margin-top:6px">${esc(lastA.t)} · ${last.rate} 分</div></div>` : ""}
   <div class="foot">样本：这些是演示记录。真机版里组内少于 3 次不排名，避免"试一次就说最有效"。</div>`;
 }
 
 function viewPool(){
-  const cats = ["ALL","MOVE","CALM","SOCIAL","PLAY","REST","FUEL"];
-  const list = POOL.filter(a => S.poolFilter==="ALL" || a.c===S.poolFilter);
-  return `
-  <h2>回血池</h2>
-  <div class="muted" style="margin-bottom:12px">这些是"你本来就愿意做"的事。推荐只会从这里挑。</div>
-  <div class="chips" style="flex-wrap:wrap;overflow:visible">
-    ${cats.map(c=>`<div class="chip" data-filter="${c}" style="${S.poolFilter===c? "background:var(--accent);color:#fff;border-color:var(--accent)":""}">${c==="ALL"?"全部":CATS[c].label}</div>`).join("")}
-  </div>
-  ${list.map(a=>`
-    <div class="rec" data-start="${a.id}">
-      <div class="r1">
-        <div class="tag" style="background:${CATS[a.c].bg};color:${CATS[a.c].color}">${categoryArt(a.c)}</div>
-        <div class="t">${a.t}</div>
-        <div class="m">${a.m} 分钟</div>
-      </div>
-      <div class="cue">${a.cue}</div>
-    </div>`).join("")}
-  <div class="foot">真机版可以增删自己的条目，也能从别的地方导入。</div>`;
+  const mode=S.poolMode||'active';
+  const list=POOL.filter(a=>mode==='archived'?data.archived.includes(a.id):!data.archived.includes(a.id))
+    .filter(a=>mode!=='favorites'||data.favorites.includes(a.id))
+    .sort((a,b)=>Number(data.favorites.includes(b.id))-Number(data.favorites.includes(a.id)));
+  return `<h2>回血池</h2><p class="muted">收藏常做的，归档暂时不想做的；历史保留当时内容。</p>
+    <button class="btn" data-edit-action="new">新增行动</button><div class="chips">
+    ${[['active','使用中'],['favorites','收藏'],['archived','已归档']].map(([v,t])=>`<button class="chip" data-pool-mode="${v}">${t}</button>`).join('')}</div>
+    ${list.map(a=>`<div class="rec"><div class="r1"><div class="tag">${categoryArt(a.c)}</div>
+    <div class="t">${data.favorites.includes(a.id)?'★ ':''}${esc(a.t)}</div><div class="m">${a.m} 分钟</div></div>
+    <div class="cue">${esc(a.cue)}</div><div class="chips" style="margin-top:10px">
+    ${!data.archived.includes(a.id)?`<button class="chip" data-start="${a.id}">开始</button>`:''}
+    <button class="chip" data-edit-action="${a.id}">编辑</button>
+    <button class="chip" data-favorite="${a.id}">${data.favorites.includes(a.id)?'取消收藏':'收藏'}</button>
+    <button class="chip" data-archive="${a.id}">${data.archived.includes(a.id)?'恢复':'归档'}</button></div></div>`).join('')||'<p>这里还没有行动，试试新增或切换分类。</p>'}`;
 }
 
 function parseIntent(text){
@@ -524,7 +503,7 @@ function viewChat(){
           <div class="rec" data-start="${a.id}" style="margin-left:0">
             <div class="r1">
               <div class="tag" style="background:${CATS[a.c].bg};color:${CATS[a.c].color}">${categoryArt(a.c)}</div>
-              <div class="t">${a.t}</div><div class="m">${a.m} 分钟</div>
+              <div class="t">${esc(a.t)}</div><div class="m">${a.m} 分钟</div>
             </div>
           </div>`).join("") : "")
     ).join("")}
@@ -574,7 +553,8 @@ const app = document.getElementById("app");
 const nav = document.getElementById("nav");
 
 function render(){
-  app.innerHTML = view();
+  app.innerHTML = (S.flash?'<div role="status" class="bubblecard">'+esc(S.flash)+'</div>':'')+
+    (data.session&&!['timer','rate','backup'].includes(S.screen)?'<button class="btn ghost" data-resume-session="1">继续：'+esc(data.session.action.t)+' · 进度已保存</button>':'')+view();
   renderNav();
   bindSliders();
   window.scrollTo({top:0});
@@ -626,16 +606,13 @@ document.addEventListener("click", e=>{
     S.recs = recsFor(null, data.demo.hour>=23 || data.demo.hour<5, S.excluded);
     render();
   } else if(t.hasAttribute("data-finish")){
-    stopTimer(); S.screen="rate"; S.rateSel=undefined; render();
+    finishWebSession();
   } else if(t.hasAttribute("data-cancel")){
-    stopTimer(); S.screen="home"; render();
+    if(confirm('取消这次行动？不会记录反馈。')){ commitWeb({...data,session:null}); stopTimer(); S.screen='home'; render(); }
   } else if(t.hasAttribute("data-rate")){
     S.rateSel = parseInt(t.getAttribute("data-rate"),10); render();
   } else if(t.hasAttribute("data-save")){
-    const now = new Date();
-    data.records.push({id:S.action.id, rate:S.rateSel, hour:now.getHours(), ts:now.getTime()});
-    save();
-    S.flash = "记下来了。"; S.screen="graph"; S.action=null; render();
+    saveWebFeedback();
   } else if(t.hasAttribute("data-filter")){
     S.poolFilter = t.getAttribute("data-filter"); render();
   } else if(t.hasAttribute("data-say")){
@@ -647,17 +624,13 @@ document.addEventListener("click", e=>{
 });
 
 function startAction(a){
-  if(!a) return;
-  S.action = a; S.left = a.m*60; S.rateSel = undefined; S.screen="timer"; render();
-  stopTimer();
-  S.timerId = setInterval(()=>{
-    S.left--;
-    if(S.left <= 0){ stopTimer(); S.left=0; S.screen="rate"; S.rateSel=undefined; render(); return; }
-    const c = document.getElementById("countdown");
-    const b = document.getElementById("tbar");
-    if(c) c.textContent = String(Math.floor(S.left/60)).padStart(2,"0")+":"+String(S.left%60).padStart(2,"0");
-    if(b) b.style.width = ((1 - S.left/(S.action.m*60))*100).toFixed(1)+"%";
-  },1000);
+  if(!a||data.archived.includes(a.id)) return;
+  if(!data.session){
+    const now=Date.now();
+    commitWeb({...data,session:{id:'s_'+now+'_'+Math.random().toString(36).slice(2),action:{...a},
+      band:assess().band,startedAt:now,deadline:now+a.m*60000,phase:'RUNNING',pausedSeconds:0}});
+  }
+  resumeAction();
 }
 function stopTimer(){ if(S.timerId){ clearInterval(S.timerId); S.timerId=null; } }
 
@@ -687,7 +660,7 @@ function viewMine(){
     </div>
   </div>
 
-  <h3>数据</h3>
+  <button class="btn ghost" data-go="backup">备份与恢复</button><h3>数据</h3>
   <div class="card">
     <div class="bl"><span>本地记录</span><span>${n} 条</span></div>
     <div class="bl" style="margin-top:8px"><span>存放位置</span><span>只有这台设备的浏览器里</span></div>
@@ -707,7 +680,7 @@ function viewMine(){
   <div class="card">
     <button class="btn ghost" data-clear="1">清空本地记录</button>
   </div>
-  <div class="foot">回血实验室 · 网页演示版 v0.24<br>第二十届全国大学生软件创新大赛 · 赛题四 AI＋健康</div>`;
+  <div class="foot">回血实验室 · 网页演示版 v0.25<br>第二十届全国大学生软件创新大赛 · 赛题四 AI＋健康</div>`;
 }
 
 document.addEventListener("click", e=>{
@@ -718,6 +691,140 @@ document.addEventListener("click", e=>{
     }
   }
 });
+
+
+/* v0.25: persistent sessions, catalog management and versioned local backups. */
+function validWebAction(a){
+  return a && typeof a.id==='string' && /^[A-Za-z0-9_-]{1,100}$/.test(a.id) &&
+    typeof a.t==='string'&&a.t.trim().length>0&&a.t.length<=80&&Number.isInteger(a.m)&&a.m>=1&&a.m<=10&&
+    Object.hasOwn(CATS,a.c)&&typeof a.cue==='string'&&a.cue.length<=500;
+}
+function validWebSession(s){
+  return s&&typeof s.id==='string'&&/^[A-Za-z0-9_-]{1,100}$/.test(s.id)&&validWebAction(s.action)&&
+    Number.isSafeInteger(s.startedAt)&&s.startedAt>=0&&Number.isSafeInteger(s.deadline)&&s.deadline>=s.startedAt&&
+    ['LOW','MID','HIGH'].includes(s.band)&&['RUNNING','PAUSED','FEEDBACK'].includes(s.phase)&&
+    Number.isInteger(s.pausedSeconds)&&s.pausedSeconds>=0&&s.pausedSeconds<=s.action.m*60;
+}
+function parseWebData(saved,strict){
+  if(!saved||typeof saved!=='object'||Array.isArray(saved)) throw Error('数据格式不正确');
+  let actions=saved.actions||DEFAULT_POOL;
+  if(!Array.isArray(actions)||actions.length>1000||!actions.every(validWebAction)||new Set(actions.map(a=>a.id)).size!==actions.length){
+    if(strict) throw Error('行动内容不正确'); actions=DEFAULT_POOL;
+  }
+  const ids=new Set(actions.map(a=>a.id));
+  const raw=Array.isArray(saved.records)?saved.records:[];
+  if(raw.length>20000) throw Error('记录过多');
+  const records=raw.filter(r=>r&&typeof r.id==='string'&&(ids.has(r.id)||validWebAction(r.action))&&
+    Number.isInteger(r.rate)&&r.rate>=1&&r.rate<=5&&Number.isSafeInteger(r.ts)&&r.ts>=0&&
+    Number.isInteger(r.hour)&&r.hour>=0&&r.hour<=23&&(!r.action||(validWebAction(r.action)&&r.action.id===r.id))&&
+    (!r.sessionId||typeof r.sessionId==='string')).map(r=>({...r,action:r.action||actions.find(a=>a.id===r.id)}));
+  const sessionIds=records.map(r=>r.sessionId).filter(Boolean);
+  if(new Set(sessionIds).size!==sessionIds.length) throw Error('实验记录重复');
+  if(strict&&records.length!==raw.length) throw Error('实验记录不完整');
+  const flags=k=>{ const f=saved[k]||[];if(!Array.isArray(f)||(strict&&f.some(id=>!ids.has(id)))) throw Error('收藏或归档不正确');return [...new Set(f.filter(id=>ids.has(id)))];};
+  const demo=saved.demo||{};const finite=(v,f)=>Number.isFinite(v)?v:f;
+  let session=saved.session||null;
+  if(session&&(!validWebSession(session)||sessionIds.includes(session.id))){if(strict) throw Error('行动进度不正确');session=null;}
+  return {actions:actions.map(a=>({...a})),records,favorites:flags('favorites'),archived:flags('archived'),session,
+    nudgeOn:typeof saved.nudgeOn==='boolean'?saved.nudgeOn:true,
+    demo:{focus:Math.max(0,finite(demo.focus,125)),screen:Math.max(0,Math.min(60,finite(demo.screen,45))),
+    hour:Math.max(0,Math.min(23,Math.floor(finite(demo.hour,new Date().getHours()))))}};
+}
+function commitWeb(next){
+  localStorage.setItem(KEY,JSON.stringify(next));data=next;POOL=data.actions;
+}
+function webRemaining(s,now=Date.now()){
+  if(s.phase==='FEEDBACK')return 0;
+  return s.phase==='PAUSED'?s.pausedSeconds:Math.max(0,Math.min(s.action.m*60,Math.ceil((s.deadline-now)/1000)));
+}
+function resumeAction(){
+  const s=data.session;if(!s)return;
+  S.action={...s.action};S.left=webRemaining(s);S.rateSel=undefined;
+  S.screen=s.phase==='FEEDBACK'?'rate':'timer';
+  stopTimer();if(s.phase==='RUNNING')S.timerId=setInterval(tickWebSession,250);render();
+}
+function tickWebSession(){
+  const s=data.session;if(!s||s.phase!=='RUNNING')return;
+  S.left=webRemaining(s);
+  if(S.left===0){finishWebSession();return;}
+  const c=document.getElementById('countdown'),b=document.getElementById('tbar');
+  if(c)c.textContent=String(Math.floor(S.left/60)).padStart(2,'0')+':'+String(S.left%60).padStart(2,'0');
+  if(b)b.style.width=(100*(1-S.left/(s.action.m*60)))+'%';
+}
+function finishWebSession(){
+  if(!data.session)return;commitWeb({...data,session:{...data.session,phase:'FEEDBACK'}});
+  stopTimer();S.action={...data.session.action};S.screen='rate';S.rateSel=undefined;render();
+}
+function saveWebFeedback(){
+  const s=data.session;if(!s||s.phase!=='FEEDBACK'||!Number.isInteger(S.rateSel)||S.rateSel<1||S.rateSel>5)return;
+  const now=new Date();let records=data.records;
+  if(!records.some(r=>r.sessionId===s.id))records=[...records,{id:s.action.id,action:{...s.action},sessionId:s.id,rate:S.rateSel,hour:now.getHours(),ts:now.getTime()}];
+  commitWeb({...data,records,session:null});stopTimer();S.flash='记下来了。';S.screen='graph';S.action=null;render();
+}
+function viewActionEditor(){
+  const a=POOL.find(a=>a.id===S.editId)||{t:'',m:3,c:'CALM',cue:''};
+  return `<div class="action-editor"><button class="chip" data-go="pool">返回回血池</button><h2>${S.editId?'编辑':'新增'}行动</h2>
+  <label>行动名称<input id="action-title" maxlength="80" value="${esc(a.t)}" style="display:block;width:100%;padding:12px"></label>
+  <label>第一步怎么做<textarea id="action-cue" maxlength="500" style="display:block;width:100%;padding:12px">${esc(a.cue)}</textarea></label>
+  <label>时长（1–10 分钟）<input id="action-minutes" type="number" min="1" max="10" value="${a.m}"></label>
+  <label>分类<select id="action-category">${Object.entries(CATS).map(([c,v])=>`<option value="${c}" ${c===a.c?'selected':''}>${v.label}</option>`).join('')}</select></label>
+  <button class="btn" data-save-action="1" style="margin-top:18px">保存行动</button></div>`;
+}
+function webBackupText(){return JSON.stringify({format:'huixue-lab-backup',version:1,platform:'web',createdAt:Date.now(),data},null,2);}
+function decodeWebBackup(text){
+  if(new TextEncoder().encode(text).length>8*1024*1024)throw Error('备份不能超过 8 MB');
+  const o=JSON.parse(text.replace(/^\uFEFF/,''));
+  if(o.format!=='huixue-lab-backup'||o.version!==1||o.platform!=='web')throw Error('请选择网页版导出的备份，安卓备份请在安卓内恢复');
+  if(!o.data||!Array.isArray(o.data.actions)||!Array.isArray(o.data.records)||!Array.isArray(o.data.favorites)||!Array.isArray(o.data.archived))throw Error('备份内容不完整');
+  return parseWebData(o.data,true);
+}
+function importWebBackup(next){
+  if(data.session)throw Error('请先完成或取消进行中的行动');
+  localStorage.setItem(KEY+'_before_import',JSON.stringify(data));commitWeb(next);S.preview=null;S.flash='恢复完成，同一份备份不会叠加记录。';
+}
+function viewBackup(){
+  return `<button class="chip" data-go="mine">返回我的</button><h2>备份与恢复</h2><p class="muted">保存本浏览器的行动、实验、收藏、归档、演示设置及进行中的行动。网页版与安卓备份分别恢复。</p>
+  <button class="btn" data-export-backup="1">导出完整备份</button><p>选择网页版备份文件（8 MB 以内）</p><input id="backup-file" type="file" accept=".json,application/json" ${data.session?'disabled':''}>
+  ${data.session?'<p>先完成或取消进行中的行动，再导入。</p>':''}
+  ${S.preview?`<div class="card"><p>${S.preview.actions.length} 个行动 · ${S.preview.records.length} 条实验 · ${S.preview.favorites.length} 个收藏</p><p>确认后将替换当前数据，导入前会保留一份本机副本。</p><button class="btn" data-confirm-import="1">确认恢复</button></div>`:''}
+  <button class="btn ghost" data-undo-import="1">恢复到上一次导入前</button>`;
+}
+document.addEventListener('visibilitychange',()=>{if(data.session&&S.screen==='timer')tickWebSession();});
+document.addEventListener('change',async e=>{
+  if(e.target.id!=='backup-file'||!e.target.files[0])return;
+  try{const file=e.target.files[0];if(file.size>8*1024*1024)throw Error('备份不能超过 8 MB');S.preview=decodeWebBackup(await file.text());S.flash='文件已检查，尚未修改数据。';}
+  catch(err){S.preview=null;S.flash='无法导入：'+err.message;}render();
+});
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-edit-action],[data-save-action],[data-favorite],[data-archive],[data-pool-mode],[data-resume-session],[data-pause-session],[data-export-backup],[data-confirm-import],[data-undo-import]');
+  if(!el)return;
+  try{
+    if(el.hasAttribute('data-edit-action')){S.editId=el.dataset.editAction==='new'?null:el.dataset.editAction;S.screen='edit';}
+    else if(el.hasAttribute('data-save-action')){
+      const id=S.editId||'custom_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+      const a={id,t:document.getElementById('action-title').value.trim(),cue:document.getElementById('action-cue').value.trim(),m:Number(document.getElementById('action-minutes').value),c:document.getElementById('action-category').value};
+      if(!validWebAction(a)||!a.cue)throw Error('请填写名称、第一步和 1–10 分钟的整数时长');
+      if(!S.editId&&POOL.length>=1000)throw Error('行动池已满');
+      commitWeb({...data,actions:S.editId?POOL.map(old=>old.id===id?a:old):[...POOL,a]});S.screen='pool';S.flash='行动已保存。';
+    }else if(el.hasAttribute('data-favorite')||el.hasAttribute('data-archive')){
+      const key=el.hasAttribute('data-favorite')?'favorites':'archived';const id=el.dataset.favorite||el.dataset.archive;
+      if(!POOL.some(a=>a.id===id))return;const ids=data[key];commitWeb({...data,[key]:ids.includes(id)?ids.filter(v=>v!==id):[...ids,id]});
+    }else if(el.hasAttribute('data-pool-mode'))S.poolMode=el.dataset.poolMode;
+    else if(el.hasAttribute('data-resume-session')){resumeAction();return;}
+    else if(el.hasAttribute('data-pause-session')){
+      const se=data.session;if(!se)return;
+      const next=se.phase==='PAUSED'?{...se,phase:'RUNNING',deadline:Date.now()+se.pausedSeconds*1000}:{...se,phase:'PAUSED',pausedSeconds:webRemaining(se)};
+      commitWeb({...data,session:next});resumeAction();return;
+    }else if(el.hasAttribute('data-export-backup')){
+      const url=URL.createObjectURL(new Blob([webBackupText()],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='huixue-web-backup.json';a.click();URL.revokeObjectURL(url);S.flash='备份已交给浏览器保存。';
+    }else if(el.hasAttribute('data-confirm-import')){if(S.preview&&confirm('替换本浏览器中的业务数据？导入前会保留副本。'))importWebBackup(S.preview);}
+    else if(el.hasAttribute('data-undo-import')){
+      const old=localStorage.getItem(KEY+'_before_import');if(!old)throw Error('还没有导入前的副本');
+      if(confirm('用导入前的副本替换当前数据？'))importWebBackup(parseWebData(JSON.parse(old),true));
+    }
+  }catch(err){S.flash='操作未完成：'+err.message;}render();
+});
+POOL=data.actions;
 
 /* 启动 */
 render();

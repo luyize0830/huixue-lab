@@ -1,0 +1,55 @@
+{
+  "versionName": "0.25",
+  "versionCode": 26,
+  "date": "2026-11-03",
+  "baseCommit": "786dcabb961d861aab59a0f1973688ea60a51a9e",
+  "jvm": {
+    "tests": 252,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "classes": 29,
+  "web": {
+    "tests": 19,
+    "failures": 0
+  },
+  "androidInstrumentation": {
+    "testsCompiled": 6,
+    "executed": false,
+    "reason": "No connected Android device or emulator"
+  },
+  "apk": {
+    "file": "huixue-lab-v0.25-debug.apk",
+    "bytes": 18719934,
+    "sha256": "8c824e2875a9b406609a01b22b95d65c3bce7c82d09358da101c4475123d61c8"
+  },
+  "testApk": {
+    "file": "huixue-lab-v0.25-androidTest.apk",
+    "bytes": 643172,
+    "sha256": "3a727431af81abfb028e77c19bb70e78d01a24f24f73020d5ead393e62a66b43"
+  },
+  "browserChecks": [
+    "create action",
+    "favorite",
+    "archive and restore",
+    "pause and reload",
+    "resume and feedback rating 4",
+    "download backup",
+    "file chooser preview",
+    "confirm import",
+    "repeat import remains one record",
+    "undo import",
+    "unsupported file rejected without data changes"
+  ],
+  "browserImagesMissing": 0,
+  "androidDeviceValidation": false,
+  "githubSync": "blocked by missing write authorization",
+  "limitations": [
+    "No native UI or process-kill execution",
+    "No killed-process completion notification guarantee",
+    "Android and web backups restore on their own platforms",
+    "Room migration deferred"
+  ],
+  "apkArtworkCount": 10
+}

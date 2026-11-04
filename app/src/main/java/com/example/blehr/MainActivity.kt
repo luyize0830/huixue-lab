@@ -70,6 +70,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.example.blehr.data.BackupManager.recover(this)
         Repo.init(this)
         ProfileRepo.init(this)
         Reminders.ensureChannel(this)

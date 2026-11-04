@@ -98,7 +98,7 @@ object ExperimentReport {
     fun build(records: List<ExperimentRecord>, pool: List<ActionItem>): ReportData {
         val byId = pool.associateBy { it.id }
         val catOf: (ExperimentRecord) -> ActionCategory = { r ->
-            byId[r.actionId]?.category ?: ActionCategory.MOVE
+            r.actionSnapshot?.category ?: byId[r.actionId]?.category ?: ActionCategory.MOVE
         }
 
         val categoryStats = ActionCategory.entries

@@ -58,7 +58,7 @@ fun shareCsv(ctx: Context, records: List<ExperimentRecord>, pool: List<ActionIte
  */
 @Composable
 fun InsightsSection(records: List<ExperimentRecord>, pool: List<ActionItem>) {
-    val ins = remember(records.size, pool.size) { InsightsEngine.compute(records, pool) }
+    val ins = remember(records, pool) { InsightsEngine.compute(records, pool) }
     val ctx = androidx.compose.ui.platform.LocalContext.current
 
     Column(Modifier.fillMaxWidth()) {

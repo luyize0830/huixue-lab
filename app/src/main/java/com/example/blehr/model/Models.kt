@@ -56,7 +56,9 @@ data class ExperimentRecord(
     val hrBefore: Int?,
     val hrAfter: Int?,
     val rating: Int,
-    val ts: Long
+    val ts: Long,
+    val sessionId: String = "",
+    val actionSnapshot: ActionItem? = null
 )
 
 /** 聚合统计：用于回血图谱与推荐理由 */

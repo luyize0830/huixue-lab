@@ -98,7 +98,8 @@ object Recommender {
 
     /** 聚合出"回血图谱"用的统计 */
     fun stats(pool: List<ActionItem>, records: List<ExperimentRecord>): List<ActionStat> {
-        return pool.mapNotNull { action ->
+        val historyPool = (records.mapNotNull { it.actionSnapshot } + pool).distinctBy { it.id }
+        return historyPool.mapNotNull { action ->
             val rel = records.filter { it.actionId == action.id }
             if (rel.isEmpty()) return@mapNotNull null
             val deltas = rel.mapNotNull { r ->

@@ -8,13 +8,15 @@ const { test } = require('node:test');
 const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 const source = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 function boot(stored = null) {
+  const storage = new Map(stored == null ? [] : [['huixue_web_v1', stored]]);
   const context = vm.createContext({
-    localStorage: { getItem: () => stored, setItem() {} },
+    localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) },
     document: {
       getElementById: () => ({ innerHTML: '' }),
       querySelectorAll: () => [], addEventListener() {}
     },
-    window: { scrollTo() {} }, setInterval, clearInterval
+    window: { scrollTo() {} }, TextEncoder, confirm: () => true,
+    setInterval: () => 1, clearInterval() {}
   });
   vm.runInContext(source, context, { timeout: 2000 });
   return expression => vm.runInContext(expression, context, { timeout: 2000 });
@@ -24,6 +26,87 @@ test('normal startup and the four tabs render', () => {
   assert.equal(boot()(`['home','pool','graph','mine'].every(s => {
     S.screen=s; return typeof view()==='string';
   })`), true);
+});
+
+test('a session survives reload and preserves its original action snapshot', () => {
+  const run=boot();
+  run(`startAction(POOL.find(a=>a.id==='water'));stopTimer();
+    const original=JSON.stringify(data.session.action);
+    data.actions=data.actions.map(a=>a.id==='water'?{...a,t:'修改后的水'}:a);save();`);
+  const stored=run('localStorage.getItem(KEY)');
+  const restored=boot(stored);
+  assert.equal(restored('data.session.action.t'), '接一杯水慢慢喝');
+  assert.equal(restored('data.actions.find(a=>a.id==="water").t'), '修改后的水');
+  assert.equal(restored('validWebSession(data.session)'), true);
+});
+
+test('deadline remaining handles suspended timers, completion and pause', () => {
+  const run=boot();
+  assert.equal(run(`webRemaining({action:{m:1},phase:'RUNNING',deadline:100000},70000)`),30);
+  assert.equal(run(`webRemaining({action:{m:1},phase:'RUNNING',deadline:100000},120000)`),0);
+  assert.equal(run(`webRemaining({action:{m:1},phase:'PAUSED',pausedSeconds:23},120000)`),23);
+});
+
+test('archived actions stay in history but never return in recommendations', () => {
+  const run=boot();
+  assert.equal(run(`(() => {
+    data.records=[{id:'water',action:{...POOL.find(a=>a.id==='water')},rate:4,ts:123456,hour:12}];
+    commitWeb({...data,archived:POOL.map(a=>a.id)});
+    return recsFor(10,false,[]).length===0&&data.records.length===1&&viewGraph().includes('接一杯水慢慢喝');
+  })()`),true);
+});
+
+test('feedback saves once and captures the action at session start', () => {
+  const run=boot();
+  assert.equal(run(`(() => {
+    startAction(POOL.find(a=>a.id==='water'));finishWebSession();
+    S.rateSel=4;saveWebFeedback();saveWebFeedback();
+    return data.records.length===1&&data.records[0].action.t==='接一杯水慢慢喝'&&data.session===null;
+  })()`),true);
+});
+
+test('backup round trip and repeated import do not duplicate records', () => {
+  const run=boot();
+  assert.equal(run(`(() => {
+    startAction(POOL.find(a=>a.id==='water'));finishWebSession();S.rateSel=5;saveWebFeedback();
+    const backup=webBackupText();const next=decodeWebBackup(backup);
+    importWebBackup(next);importWebBackup(decodeWebBackup(backup));
+    return data.records.length===1&&!!localStorage.getItem(KEY+'_before_import');
+  })()`),true);
+});
+
+test('incomplete backups, duplicate sessions and invalid catalog entries are rejected', () => {
+  const run=boot();
+  assert.equal(run(`(() => {
+    const failures=[]; const b=JSON.parse(webBackupText());
+    for(const mutate of [o=>{o.version=9},o=>{o.platform='android'},o=>{o.data.actions[0].m=0},
+      o=>{delete o.data.favorites},o=>{o.data.actions.push({...o.data.actions[0]})},
+      o=>{o.data.favorites=['missing']},o=>{o.data.records=[{id:'water',rate:9,hour:12,ts:1}]}]){
+      const o=JSON.parse(JSON.stringify(b));mutate(o);
+      try{decodeWebBackup(JSON.stringify(o));failures.push(false)}catch(e){failures.push(true)}
+    }
+    return failures.every(Boolean)&&data.records.length===0;
+  })()`),true);
+});
+
+test('user-authored action titles and cues are escaped in all main views', () => {
+  const run=boot();
+  assert.equal(run(`(() => {
+    const a={id:'custom_xss',t:'<img src=x onerror=alert(1)>',m:1,c:'CALM',cue:'<script>alert(1)</script>'};
+    commitWeb({...data,actions:[...POOL,a]});S.poolFilter='ALL';
+    const pool=viewPool();startAction(a);stopTimer();const timer=viewTimer();
+    return !pool.includes('<img src=x')&&!pool.includes('<script>')&&!timer.includes('<script>')&&pool.includes('&lt;script&gt;');
+  })()`),true);
+});
+
+test('storage failure does not replace the in-memory snapshot during import', () => {
+  const run=boot();
+  assert.equal(run(`(() => {
+    const before=JSON.stringify(data);const next=decodeWebBackup(webBackupText());next.records=[];
+    localStorage.setItem=()=>{throw Error('storage full')};
+    try{importWebBackup(next)}catch(e){}
+    return JSON.stringify(data)===before;
+  })()`),true);
 });
 
 test('all companion expressions and category illustrations resolve to bundled files', () => {

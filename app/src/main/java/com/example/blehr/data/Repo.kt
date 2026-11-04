@@ -1,13 +1,15 @@
 package com.example.blehr.data
 
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import android.content.Context
 import com.example.blehr.model.ActionCategory
 import com.example.blehr.model.ActionItem
 import com.example.blehr.model.ExperimentRecord
+import com.example.blehr.logic.LabData
+import com.example.blehr.logic.ActionSession
+import com.example.blehr.logic.SessionPhase
 
 /**
  * 默认回血池：按"五分钟内能不能做完"挑的，都是宿舍/宿舍楼下/图书馆就能做的事。
@@ -62,12 +64,15 @@ object DefaultPool {
 /**
  * 全 App 唯一的可变数据源。
  *
- * 用 mutableStateListOf 是为了让 Compose 直接观察增删；持久化走 SharedPreferences(JSON)，
- * 数据量小（几十条记录），够用且零依赖——这是有意为之的技术选择，不是偷懒。
+ * Compose 观察不可变快照；整个业务状态先原子落盘，再发布给界面。
  */
 object Repo {
-    val records = mutableStateListOf<ExperimentRecord>()
-    val pool = mutableStateListOf<ActionItem>()
+    var snapshot by mutableStateOf(LabData(emptyList()))
+        private set
+    val records get() = snapshot.records
+    val allActions get() = snapshot.actions
+    val pool get() = allActions.filter { it.id !in snapshot.archived }
+    val session get() = snapshot.session
 
     var ready by mutableStateOf(false)
         private set
@@ -79,44 +84,64 @@ object Repo {
         val s = Store(context.applicationContext)
         store = s
 
-        val savedPool = s.loadPool()
-        if (savedPool == null) {
-            pool.addAll(DefaultPool.items)
-            s.savePool(pool)
-        } else {
-            pool.addAll(savedPool)
-        }
-
-        records.addAll(s.loadRecords())
+        snapshot = s.load(DefaultPool.items)
         ready = true
     }
 
+    fun reload() { snapshot = checkNotNull(store).load(DefaultPool.items) }
+    fun acceptRestored(data: LabData) { snapshot = data }
+
+    private fun update(next: LabData) {
+        checkNotNull(store).save(next)
+        snapshot = next
+    }
+
+    fun setSession(s: ActionSession?) = update(snapshot.copy(session = s))
+    fun finishSession() = session?.let { setSession(it.copy(phase = SessionPhase.FEEDBACK)) }
+    fun saveFeedback(rating: Int, hr: Int?, now: Long) = update(snapshot.withFeedback(rating, hr, now))
+
     fun addRecord(r: ExperimentRecord) {
-        records.add(0, r)
-        store?.saveRecords(records)
+        if (r.sessionId.isNotEmpty() && records.any { it.sessionId == r.sessionId }) return
+        update(snapshot.copy(records = listOf(r.copy(actionSnapshot = r.actionSnapshot ?: findAction(r.actionId))) + records))
     }
 
     fun clearRecords() {
-        records.clear()
-        store?.saveRecords(records)
+        update(snapshot.copy(records = emptyList()))
     }
 
     fun addAction(a: ActionItem) {
-        if (pool.any { it.id == a.id }) return
-        pool.add(a)
-        store?.savePool(pool)
+        require(allActions.none { it.id == a.id })
+        require(a.title.isNotBlank() && a.title.length <= 80 && a.minutes in 1..10 && a.cue.length <= 500)
+        require(allActions.size < 1000) { "行动池已满，请先整理现有行动" }
+        update(snapshot.copy(actions = allActions + a))
+    }
+
+    fun editAction(a: ActionItem) {
+        require(allActions.any { it.id == a.id })
+        require(a.title.isNotBlank() && a.title.length <= 80 && a.minutes in 1..10 && a.cue.length <= 500)
+        update(snapshot.copy(actions = allActions.map { if (it.id == a.id) a else it }))
+    }
+
+    fun favorite(id: String) {
+        require(allActions.any { it.id == id })
+        val ids = snapshot.favorites
+        update(snapshot.copy(favorites = if (id in ids) ids - id else ids + id))
+    }
+
+    fun archive(id: String) {
+        require(allActions.any { it.id == id })
+        val ids = snapshot.archived
+        update(snapshot.copy(archived = if (id in ids) ids - id else ids + id))
     }
 
     fun removeAction(id: String) {
-        pool.removeAll { it.id == id }
-        store?.savePool(pool)
+        if (id !in snapshot.archived) archive(id)
     }
 
-    fun findAction(id: String): ActionItem? = pool.firstOrNull { it.id == id }
+    fun findAction(id: String): ActionItem? = allActions.firstOrNull { it.id == id }
 
     fun resetPool() {
-        pool.clear()
-        pool.addAll(DefaultPool.items)
-        store?.savePool(pool)
+        val missing = DefaultPool.items.filter { default -> allActions.none { it.id == default.id } }
+        update(snapshot.copy(actions = allActions + missing, archived = snapshot.archived - DefaultPool.items.map { it.id }.toSet()))
     }
 }
