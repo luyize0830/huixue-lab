@@ -44,12 +44,13 @@
   ],
   "browserImagesMissing": 0,
   "androidDeviceValidation": false,
-  "githubSync": "blocked by missing write authorization",
+  "githubSync": "main pushed successfully on 2026-11-04",
   "limitations": [
     "No native UI or process-kill execution",
     "No killed-process completion notification guarantee",
     "Android and web backups restore on their own platforms",
     "Room migration deferred"
   ],
-  "apkArtworkCount": 10
+  "apkArtworkCount": 10,
+  "releaseUrl": "https://github.com/luyize0830/huixue-lab/releases/tag/v0.25"
 }

@@ -18,7 +18,7 @@
 
 网页版同步行动管理、计时恢复与业务备份；两端备份分别在各自平台恢复。现有数据迁至原子快照，本轮暂不引入 Room。
 
-[验证记录](docs/v0.25-validation.md)包含构建、测试、截图与局限。6 个安卓设备测试已编译成独立测试 APK，尚未执行；本轮无连接设备，不保证进程被系统终止时准点通知。GitHub 写入授权仍缺失，同步与 Release 待完成。
+[验证记录](docs/v0.25-validation.md)包含构建、测试、截图与局限。6 个安卓设备测试已编译成独立测试 APK，尚未执行；本轮无连接设备，不保证进程被系统终止时准点通知。GitHub 主分支已同步；[v0.25 发布页](https://github.com/luyize0830/huixue-lab/releases/tag/v0.25) 提供 APK 和证据包。
 
 ![新增行动](evidence/v025/web-editor.png)
 
@@ -32,7 +32,7 @@
 
 ![v0.24 素材总览](evidence/v024/artwork-overview.png)
 
-安卓与网页使用同一套 WebP，运行时合计 936,086 字节。人物参考社区鲸鱼娘，保留上善无形、ZipZipPipe 署名与非商用派生标注；完整[来源、提示词与导出记录](assets/visuals-v024/README.md)可查。[验证记录](docs/v0.24-validation.md)包含构建、资源和截图核对；本轮未连接安卓真机。GitHub 同步与 Release 仍待写入授权。
+安卓与网页使用同一套 WebP，运行时合计 936,086 字节。人物参考社区鲸鱼娘，保留上善无形、ZipZipPipe 署名与非商用派生标注；完整[来源、提示词与导出记录](assets/visuals-v024/README.md)可查。[验证记录](docs/v0.24-validation.md)包含构建、资源和截图核对；本轮未连接安卓真机。该阶段的改动已随 v0.25 同步 GitHub。
 
 ## v0.23：聊天与模型接入稳定性修复
 
