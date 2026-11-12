@@ -185,6 +185,14 @@ function assess(){
   else if(d.focus >= 60){ p += 6; reasons.push("连续专注 " + Math.round(d.focus) + " 分钟"); }
   if(d.hour >= 23 || d.hour < 5){ p += 15; reasons.push("现在是 " + d.hour + " 点，已经过了平时睡觉的时间"); }
   if(d.screen >= 40){ p += 8; reasons.push("过去一小时屏幕亮了 " + Math.round(d.screen) + " 分钟"); }
+  const sl = d.sleep;
+  if(typeof sl === "number" && isFinite(sl)){
+    const slept = "昨夜睡了 " + Math.floor(sl/60) + " 小时 " + Math.round(sl%60) + " 分";
+    if(sl < 300){ p += 16; reasons.push(slept + "，明显没睡够，今天的基线要往下调"); }
+    else if(sl < 360){ p += 10; reasons.push(slept + "，不太够，今天更容易累"); }
+    else if(sl < 420){ p += 5; reasons.push(slept + "，略少一点"); }
+    else reasons.push(slept + "，睡眠没拖后腿");
+  }
   const score = Math.max(5, Math.min(100, 100 - p));
   const band = score < 40 ? "LOW" : score < 70 ? "MID" : "HIGH";
   let headline = "状态充足，今天适合干点费脑子的。";
@@ -336,6 +344,7 @@ function viewHome(){
     ${slider("focus","连续专注", data.demo.focus, 0, 180, "分钟")}
     ${slider("screen","近一小时屏幕", data.demo.screen, 0, 90, "分钟")}
     ${slider("hour","现在是几点", data.demo.hour, 0, 23, "点")}
+    ${slider("sleep","昨夜睡眠", data.demo.sleep, 0, 600, "分钟")}
   </div>
 
   <div class="foot">网页演示版 · 数据是演示值，不接你的手机。真机版读手环心率与系统使用数据，功能更多。</div>`;
@@ -728,7 +737,8 @@ function parseWebData(saved,strict){
   return {actions:actions.map(a=>({...a})),records,favorites:flags('favorites'),archived:flags('archived'),session,
     nudgeOn:typeof saved.nudgeOn==='boolean'?saved.nudgeOn:true,
     demo:{focus:Math.max(0,finite(demo.focus,125)),screen:Math.max(0,Math.min(60,finite(demo.screen,45))),
-    hour:Math.max(0,Math.min(23,Math.floor(finite(demo.hour,new Date().getHours()))))}};
+    hour:Math.max(0,Math.min(23,Math.floor(finite(demo.hour,new Date().getHours())))),
+    sleep:Math.max(0,Math.min(720,finite(demo.sleep,450)))}};
 }
 function commitWeb(next){
   localStorage.setItem(KEY,JSON.stringify(next));data=next;POOL=data.actions;
