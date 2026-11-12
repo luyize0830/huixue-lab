@@ -173,3 +173,12 @@ test('invalid demo fields do not produce NaN or impossible hours', () => {
   assert.equal(run('data.demo.screen'), 0);
   assert.equal(run('data.demo.hour'), 23);
 });
+
+test('sleep shortage lowers the state score like the Android rules', () => {
+  const short=boot(JSON.stringify({records:[], demo:{ focus:0, screen:0, hour:12, sleep:270 }}));
+  assert.equal(short('assess().score'), 84);
+  assert.equal(short('assess().reasons.some(r => r.includes("没睡够"))'), true);
+  const enough=boot(JSON.stringify({records:[], demo:{ focus:0, screen:0, hour:12, sleep:480 }}));
+  assert.equal(enough('assess().score'), 100);
+  assert.equal(enough('data.demo.sleep'), 480);
+});
