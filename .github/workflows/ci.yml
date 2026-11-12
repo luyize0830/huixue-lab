@@ -49,6 +49,19 @@ jobs:
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --console=plain
 
+      - name: Report APK size and upload APK
+        run: |
+          APK=$(ls app/build/outputs/apk/debug/*.apk | head -1)
+          echo "APK file: $APK"
+          echo "APK bytes: $(stat -c%s "$APK")"
+          echo "APK sha256: $(sha256sum "$APK" | cut -d' ' -f1)"
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+
       - name: Upload unit test reports
         if: always()
         uses: actions/upload-artifact@v4
