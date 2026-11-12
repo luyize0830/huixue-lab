@@ -257,7 +257,8 @@ fun HuixueApp(
                     focusMinutes = focusMinutes,
                     screenMinutesLastHour = screenMinutes,
                     hourOfDay = hour,
-                    sedentaryMinutes = activity.stillMinutes
+                    sedentaryMinutes = activity.stillMinutes,
+                    sleepMinutesLastNight = wearable.sleepMinutesLastNight
                 )
             )
             // 她还没上线时不主动开口：写了 pending 也显示不出来，
@@ -287,7 +288,8 @@ fun HuixueApp(
         focusMinutes = focusMinutes,
         screenMinutesLastHour = screenMinutes,
         hourOfDay = hour,
-        sedentaryMinutes = activity.stillMinutes
+        sedentaryMinutes = activity.stillMinutes,
+        sleepMinutesLastNight = wearable.sleepMinutesLastNight
     )
     val assessment = StateEngine.assess(snapshot)
     fun startAction(action: ActionItem, pairStart: Long? = null) {
