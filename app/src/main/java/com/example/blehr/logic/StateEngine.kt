@@ -84,6 +84,29 @@ object StateEngine {
             }
         }
 
+        // ---- 6. 昨夜睡眠（Health Connect）：没睡够，今天的基线整体往下调 ----
+        // 睡眠决定的是「今天开局有多少电」，所以缺觉直接扣分；
+        // 拿不到睡眠数据就跳过，不编造（同久坐口径）。
+        val sleep = s.sleepMinutesLastNight
+        if (sleep != null) {
+            val slept = "昨夜睡了 ${sleep / 60} 小时 ${sleep % 60} 分"
+            when {
+                sleep < 300 -> {
+                    penalty += 16
+                    reasons += "$slept，明显没睡够，今天的基线要往下调"
+                }
+                sleep < 360 -> {
+                    penalty += 10
+                    reasons += "$slept，不太够，今天更容易累"
+                }
+                sleep < 420 -> {
+                    penalty += 5
+                    reasons += "$slept，略少一点"
+                }
+                else -> reasons += "$slept，睡眠没拖后腿"
+            }
+        }
+
         val score = (100 - penalty).coerceIn(5, 100)
         val band = when {
             score < 40 -> EnergyBand.LOW
