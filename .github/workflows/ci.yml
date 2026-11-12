@@ -38,7 +38,7 @@ jobs:
       - name: Set up Android SDK platform 37
         uses: android-actions/setup-android@v3
         with:
-          packages: "platforms;android-37 platform-tools"
+          packages: "platforms;android-37.0 build-tools;37.0.0 platform-tools"
 
       - name: Run JVM unit tests
         run: ./gradlew testDebugUnitTest --console=plain
