@@ -144,4 +144,31 @@ class StateEngineTest {
         assertEquals(45, mid.score)
         assertEquals(EnergyBand.MID, mid.band)
     }
+
+    @Test
+    fun `昨夜睡眠不足5小时扣16分并说明基线下调`() {
+        val r = StateEngine.assess(SensorSnapshot(sleepMinutesLastNight = 270))
+        assertEquals(84, r.score)
+        assertTrue(r.reasons.any { it.contains("昨夜睡了 4 小时 30 分") && it.contains("没睡够") })
+    }
+
+    @Test
+    fun `睡眠分档扣分 5到6小时扣10 6到7小时扣5`() {
+        assertEquals(90, StateEngine.assess(SensorSnapshot(sleepMinutesLastNight = 330)).score)
+        assertEquals(95, StateEngine.assess(SensorSnapshot(sleepMinutesLastNight = 390)).score)
+        // 边界：正好 300 分钟落入第二档，正好 420 分钟不扣分
+        assertEquals(90, StateEngine.assess(SensorSnapshot(sleepMinutesLastNight = 300)).score)
+        assertEquals(100, StateEngine.assess(SensorSnapshot(sleepMinutesLastNight = 420)).score)
+    }
+
+    @Test
+    fun `睡眠充足不扣分 没数据不扣分也不编依据`() {
+        val enough = StateEngine.assess(SensorSnapshot(sleepMinutesLastNight = 480))
+        assertEquals(100, enough.score)
+        assertTrue(enough.reasons.any { it.contains("昨夜睡了 8 小时 0 分") && it.contains("没拖后腿") })
+
+        val missing = StateEngine.assess(SensorSnapshot(sleepMinutesLastNight = null))
+        assertEquals(100, missing.score)
+        assertTrue(missing.reasons.none { it.contains("昨夜睡了") })
+    }
 }
