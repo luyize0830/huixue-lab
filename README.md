@@ -6,6 +6,17 @@
 
 > 改代码前先看 [`AGENTS.md`](AGENTS.md)：**每次修改后都要跑测试、提交并 push 到 GitHub**（用户 2026-11-03 明确要求），涉及用户可见变化时还要同步 README、`docs/03`–`docs/08`、Release 与桌面交接包。
 
+## v0.26：睡眠纳入状态基线
+
+| 当前版本 | versionCode | JVM 测试 | 网页检查 | debug APK |
+|---|---|---|---|---|
+| 0.26 | 27 | 255 例（29 类）通过 | 20 例通过 | 18,662,355 字节 |
+
+- **睡眠参与状态评估（F-42）**：Health Connect 读到的昨夜睡眠时长进入状态评估——不足 5 小时扣 16 分、5–6 小时扣 10 分、6–7 小时扣 5 分，每档都在依据里写明「昨夜睡了 X 小时 Y 分」；读不到睡眠数据时不扣分、不编依据。网页版同步同一规则并加了演示滑杆。
+- **CI 自动验收**：新增 GitHub Actions，每次推送自动执行 JVM 单测、网页自检与 debug 构建，本版数字即由 CI 验证。
+
+[验证记录](docs/v0.26-validation.md)包含构建、测试与局限。6 个安卓设备测试仍仅编译、未执行，清单见 [真机验证清单](docs/device-validation-checklist.md)。GitHub 主分支已同步；[v0.26 发布页](https://github.com/luyize0830/huixue-lab/releases/tag/v0.26)。
+
 ## v0.25：计时恢复、行动管理与完整备份
 
 | 当前版本 | versionCode | JVM 测试 | 网页检查 | debug APK |
@@ -145,11 +156,11 @@ app/src/main/java/com/example/blehr/
 
 ## 测试
 
-当前 252 个 JVM 测试与 19 个网页检查通过，详见 v0.25 验证记录；另有 6 个设备用例仅编译。网页检查运行 `node web-demo/selftest.js`。
+当前 255 个 JVM 测试与 20 个网页检查通过（GitHub Actions CI 执行），详见 v0.26 验证记录；另有 6 个设备用例仅编译。网页检查运行 `node web-demo/selftest.js`。
 
 以下为早期版本的 76 例覆盖记录：`.\gradlew.bat testDebugUnitTest` 全绿：
 
-- `logic/StateEngineTest.kt`：12 个，各信号扣分档位、缺失降级、档位阈值、五信号全报警 = 25 分
+- `logic/StateEngineTest.kt`：15 个，各信号扣分档位（含睡眠分档）、缺失降级、档位阈值、五信号全报警 = 25 分
 - `logic/RecommenderTest.kt`：8 个，空池、limit、同档位过滤、Thompson 收敛方向、探索加成、统计口径
 - `data/SessionMathTest.kt`：9 个，熄屏归零、5 分钟断线、跨小时窗口裁剪、上限截断、时间倒流
 - `data/ActivityTrackerTest.kt`：5 个，未知返回 null、8 小时封顶、负值保护
