@@ -6,7 +6,7 @@
 
 用户在 2026-11-03 明确要求：**以后每次修改后都同步更新到 GitHub**。所以任何一次改动，收尾时按这个顺序走完，不要停在本地：
 
-1. `.\gradlew.bat testDebugUnitTest` —— 单测必须全绿（当前 252 个用例），不绿就不提交。
+1. `.\gradlew.bat testDebugUnitTest` —— 单测必须全绿（当前 255 个用例），不绿就不提交。
 2. `git add -A && git commit -m "<type>(vX.YZ): <做了什么、为什么>"` —— 提交信息写清"改了什么"和"为什么"。
 3. `git push origin main` —— 推到主分支。PowerShell 里 git 把进度写到 stderr，会显示 `exit code: 1`，看最后一行 `xxx..yyy  main -> main` 才算成功。
 4. 如果这次改了**用户能看见的东西**（新功能、界面、文案、版本号），还要补齐：
