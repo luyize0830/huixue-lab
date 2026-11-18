@@ -1,0 +1,191 @@
+{
+  "total": 267,
+  "classes": [
+    {
+      "name": "com.example.blehr.ble.HrFrameParseTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.data.ActivityTrackerTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.data.ChatCodecTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.data.LlmClientTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.data.SessionMathTest",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.ChatReplyQueueTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.ExperimentReportTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.HrvMathTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.HumanizerTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.InitiativeTest",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.InsightsEngineTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.IntentParserTest",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.LabDataTest",
+      "tests": 18,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.LlmErrorsTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.LlmReplyParserTest",
+      "tests": 17,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.LlmResponseTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.MoodRuleTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.MusicSuggestionTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.NudgePlannerTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.PairingTest",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.PersonaPresetTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.PersonaTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.RecommendationLogTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.RecommenderConstraintsTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.RecommenderTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.ReplyGateTest",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.RhythmTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.SleepWindowTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.StateEngineTest",
+      "tests": 15,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.logic.StressEngineTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "com.example.blehr.player.SynthTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0
+    }
+  ]
+}

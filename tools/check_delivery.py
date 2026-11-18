@@ -17,7 +17,14 @@ assert manifest['version'] == version and manifest['versionCode'] == code, 'Rele
 for number in range(3, 9):
     path = next((root / 'docs').glob(f'{number:02d}-*.md'))
     header = next(line for line in path.read_text(encoding='utf-8').splitlines() if line.startswith('> 当前交付'))
-    for expected in (f'v{version} / versionCode {code}', f"JVM {manifest['jvmTests']} 例", f"网页 {manifest['webTests']} 例"):
+    for expected in (
+        f'v{version} / versionCode {code}',
+        f"代码基线 `{manifest['codeCommit'][:7]}`",
+        f"JVM {manifest['jvmTests']} 例",
+        f"网页 {manifest['webTests']} 例",
+        f"安卓设备测试 {manifest['instrumentationTests']} 例",
+        *(f"{artifact['bytes']:,} 字节" for artifact in manifest['artifacts']),
+    ):
         assert expected in header, f'{path.name}: expected {expected}'
 assert f'## v{version}' in (root / 'README.md').read_text(encoding='utf-8'), 'README release section missing'
 if args.require_unit_reports:

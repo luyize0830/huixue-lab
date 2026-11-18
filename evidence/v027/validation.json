@@ -1,0 +1,49 @@
+{
+  "version": "0.27",
+  "versionCode": 28,
+  "date": "2026-11-18",
+  "codeCommit": "656c368db23fb669a9cbea5070e75e75148188c0",
+  "jvmTests": 267,
+  "jvmClasses": 31,
+  "webTests": 24,
+  "instrumentationTests": 7,
+  "instrumentationRuns": {
+    "physicalAndroid16": "7/7",
+    "emulatorAndroid17": "7/7"
+  },
+  "artifacts": [
+    {
+      "name": "huixue-lab-v0.27-release.apk",
+      "bytes": 4625098,
+      "sha256": "7dc624aaf2cb76e36ca8784e3a34d580c7b7be64719d233aef5cedd4ac18a699"
+    },
+    {
+      "name": "huixue-lab-v0.27-debug-compat.apk",
+      "bytes": 18754270,
+      "sha256": "e0ebda4f5a5a93407366e4908912e76852bf8457f895898752251ab09b767170"
+    }
+  ],
+  "physicalBle": "Earlier UI text reported 79 bpm, but no matching verified screenshot was captured. Live BLE-to-score verification remains pending.",
+  "remaining": [
+    "Verified live BLE readings and expanded score evidence in the same observation",
+    "Real Health Connect sleep end-to-end",
+    "Long running lock-screen/Doze notification timing",
+    "Current real model service/TTS regression",
+    "10 interviews and 8–12 participants over 14 days"
+  ],
+  "releaseSmoke": {
+    "platform": "Android 17 emulator",
+    "signed": true,
+    "debuggable": false,
+    "result": "passed",
+    "checks": [
+      "cold startup",
+      "expanded reasons",
+      "five-minute recommendations",
+      "timer completion",
+      "pending feedback survives force-stop",
+      "rating saved",
+      "paused session survives force-stop"
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "version": "0.27",
+  "rounds": 1,
+  "selected": 1,
+  "records": 1,
+  "source": "DEMO",
+  "band": "HIGH",
+  "errors": [],
+  "checks": [
+    "five-minute budget",
+    "pause and reload",
+    "feedback linked to selected round",
+    "CSV download labels DEMO"
+  ]
+}
