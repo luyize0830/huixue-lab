@@ -80,7 +80,7 @@ object InitiativeStore {
             .putLong(KEY_PENDING_TS, now)
             .apply()
 
-        if (notify && Reminders.isEnabled(ctx)) {
+        if (notify && Reminders.isEnabled(ctx) && Reminders.canPost(ctx)) {
             Reminders.post(ctx, "小夜", line)
         }
         return line

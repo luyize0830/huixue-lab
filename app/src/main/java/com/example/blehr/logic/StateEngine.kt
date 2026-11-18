@@ -26,7 +26,7 @@ object StateEngine {
             when {
                 diff >= 15 -> {
                     penalty += 22
-                    reasons += "心率 $hr bpm，比你今天的静息基线（$base bpm）高 $diff bpm"
+                    reasons += "心率 $hr bpm，比近期参考基线（$base bpm，最近 30 次读数最低值）高 $diff bpm"
                 }
                 diff >= 8 -> {
                     penalty += 10

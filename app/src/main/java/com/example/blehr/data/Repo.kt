@@ -10,6 +10,8 @@ import com.example.blehr.model.ExperimentRecord
 import com.example.blehr.logic.LabData
 import com.example.blehr.logic.ActionSession
 import com.example.blehr.logic.SessionPhase
+import com.example.blehr.logic.RecommendationRound
+import com.example.blehr.logic.RecommendationLog
 
 /**
  * 默认回血池：按"五分钟内能不能做完"挑的，都是宿舍/宿舍楼下/图书馆就能做的事。
@@ -97,6 +99,19 @@ object Repo {
     }
 
     fun setSession(s: ActionSession?) = update(snapshot.copy(session = s))
+    fun showRecommendation(round: RecommendationRound) {
+        val next = RecommendationLog.show(snapshot.recommendations, round)
+        if (next != snapshot.recommendations) update(snapshot.copy(recommendations = next))
+    }
+    fun skipRecommendation(id: String) {
+        val next = RecommendationLog.skip(snapshot.recommendations, id, System.currentTimeMillis())
+        if (next != snapshot.recommendations) update(snapshot.copy(recommendations = next))
+    }
+    fun startSession(s: ActionSession, round: RecommendationRound? = null) {
+        check(session == null)
+        update(snapshot.copy(session = s, recommendations = if (round == null) snapshot.recommendations else
+            RecommendationLog.select(snapshot.recommendations, round, s, System.currentTimeMillis())))
+    }
     fun finishSession() = session?.let { setSession(it.copy(phase = SessionPhase.FEEDBACK)) }
     fun saveFeedback(rating: Int, hr: Int?, now: Long) = update(snapshot.withFeedback(rating, hr, now))
 
@@ -106,7 +121,7 @@ object Repo {
     }
 
     fun clearRecords() {
-        update(snapshot.copy(records = emptyList()))
+        update(snapshot.copy(records = emptyList(), recommendations = emptyList()))
     }
 
     fun addAction(a: ActionItem) {

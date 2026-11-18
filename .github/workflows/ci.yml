@@ -47,7 +47,10 @@ jobs:
         run: ./gradlew testDebugUnitTest --console=plain
 
       - name: Assemble debug APK
-        run: ./gradlew assembleDebug --console=plain
+        run: ./gradlew assembleDebug assembleDebugAndroidTest --console=plain
+
+      - name: Check submission document versions and test counts
+        run: python3 tools/check_delivery.py --require-unit-reports
 
       - name: Report APK size and upload APK
         run: |

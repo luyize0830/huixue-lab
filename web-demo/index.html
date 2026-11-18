@@ -207,6 +207,15 @@ function moodOf(score){ return score < 70 ? "worried" : score >= 85 ? "happy" : 
 function moodLabel(m){ return m === "worried" ? "在担心你" : m === "happy" ? "心情不错" : "有点困"; }
 
 /* ---------------- 推荐 ---------------- */
+function sampleGamma(shape){
+  const d=shape-1/3,c=1/Math.sqrt(9*d);
+  while(true){
+    const x=Math.sqrt(-2*Math.log(Math.max(Math.random(),1e-12)))*Math.cos(2*Math.PI*Math.random());
+    let v=1+c*x;if(v<=0)continue;v=v*v*v;
+    if(Math.log(Math.max(Math.random(),1e-12))<0.5*x*x+d-d*v+d*Math.log(v))return d*v;
+  }
+}
+function sampleBeta(a,b){const x=sampleGamma(a),y=sampleGamma(b);return x/(x+y);}
 function recsFor(budget, night, exclude){
   const hour = data.demo.hour;
   const lateNight = night || hour >= 23 || hour < 5;
@@ -218,12 +227,11 @@ function recsFor(budget, night, exclude){
     if(quiet.length >= 3) cand = quiet;
   }
   const scored = cand.map(a => {
-    const rs = data.records.filter(r => r.id === a.id);
+    const rs = data.records.filter(r => r.id === a.id && r.band === assess().band);
     const n = rs.length;
     const avg = n ? rs.reduce((s,r)=>s+r.rate,0)/n : 0;
-    let v = n ? avg/5 : 0.55;
-    if(n === 0) v += 0.12;
-    v += Math.random()*0.18;
+    const success=rs.filter(r=>r.rate>=4).length;
+    let v=sampleBeta(1+success,1+n-success)+(n===0?0.18:0);
     return {a, v, n, avg};
   }).sort((x,y)=>y.v-x.v);
   return scored.slice(0,3).map(o => {
@@ -359,12 +367,14 @@ function viewRec(){
   const a = assess();
   const lateNight = a.hour >= 23 || a.hour < 5;
   if(!S.recs.length){
-    S.recs = recsFor(null, lateNight, S.excluded);
+    S.recs = recsFor(5, lateNight, S.excluded);
   }
+  ensureWebRound();
   return `
   <div class="back" data-go="home">← 回首页</div>
   <h2>这个状态下，值得试的</h2>
-  <div class="muted" style="margin-bottom:14px">${lateNight? "深夜时段只给能收尾的，不给你要说话的选项。" : "按你的精力和时段筛的，只有五分钟以内的。"}</div>
+  <div class="muted" style="margin-bottom:14px">${lateNight? "深夜优先能收尾的小事，每件不超过五分钟。" : "按你的精力和时段筛的，只有五分钟以内的。"}</div>
+  ${S.recs.length?'':'<div class="card">没有符合条件的新行动了，可以回回血池挑选。</div>'}
   ${S.recs.map(a => `
     <div class="rec" data-start="${a.id}">
       <div class="r1">
@@ -425,8 +435,13 @@ function viewGraph(){
     <div><b>${n}</b><span>实验次数</span></div>
     <div><b>${n? avg.toFixed(1) : "—"}</b><span>平均有效分</span></div>
     <div><b>${n? Math.round(eff*100)+"%" : "—"}</b><span>觉得有用的比例</span></div>
-    <div><b>${n? Math.min(12, Math.ceil(n/3)) : 0}</b><span>连续天数</span></div>
+    <div><b>${new Set(rs.map(r=>new Date(r.ts).toLocaleDateString())).size}</b><span>覆盖天数</span></div>
   </div>
+
+  <h3>首页推荐记录 · 演示</h3>
+  <div class="card">展示 ${data.recommendations.length} 轮 · 选择 ${data.recommendations.filter(r=>r.outcome==='SELECTED').length} 轮 · 跳过 ${data.recommendations.filter(r=>r.outcome==='SKIPPED').length} 轮
+  <p class="muted">网页全部使用演示信号，真实接受率为 —。每批候选算一轮，直接从回血池开始不计入。</p>
+  <button class="btn ghost" data-export-recommendations="1">导出推荐记录（CSV）</button></div>
 
   <h3>哪一类对你最有效</h3>
   <div class="card">
@@ -605,14 +620,19 @@ document.addEventListener("click", e=>{
   if(t.hasAttribute("data-go")){
     stopTimer();
     const g = t.getAttribute("data-go");
-    if(g==="rec"){ S.recs=[]; S.excluded=[]; S.chatScene=""; }
+    if(S.screen==='rec')skipWebRound();
+    if(g==="rec"){
+      if(data.session){resumeAction();return;}
+      S.recs=[]; S.roundId=null; S.excluded=[]; S.chatScene="";
+    }
     S.screen = g;
     render();
   } else if(t.hasAttribute("data-start")){
     startAction(POOL.find(p=>p.id===t.getAttribute("data-start")));
   } else if(t.hasAttribute("data-batch")){
+    skipWebRound();S.roundId=null;
     S.excluded = S.excluded.concat(S.recs.map(r=>r.id));
-    S.recs = recsFor(null, data.demo.hour>=23 || data.demo.hour<5, S.excluded);
+    S.recs = recsFor(5, data.demo.hour>=23 || data.demo.hour<5, S.excluded);
     render();
   } else if(t.hasAttribute("data-finish")){
     finishWebSession();
@@ -636,8 +656,11 @@ function startAction(a){
   if(!a||data.archived.includes(a.id)) return;
   if(!data.session){
     const now=Date.now();
-    commitWeb({...data,session:{id:'s_'+now+'_'+Math.random().toString(36).slice(2),action:{...a},
-      band:assess().band,startedAt:now,deadline:now+a.m*60000,phase:'RUNNING',pausedSeconds:0}});
+    const session={id:'s_'+now+'_'+Math.random().toString(36).slice(2),action:{...a},
+      band:assess().band,startedAt:now,deadline:now+a.m*60000,phase:'RUNNING',pausedSeconds:0};
+    const recommendations=data.recommendations.map(r=>S.screen==='rec'&&r.id===S.roundId&&r.outcome==='SHOWN'&&r.candidateIds.includes(a.id)?
+      {...r,outcome:'SELECTED',selectedActionId:a.id,sessionId:session.id,resolvedAt:Math.max(now,r.shownAt)}:r);
+    commitWeb({...data,session,recommendations});
   }
   resumeAction();
 }
@@ -695,7 +718,7 @@ function viewMine(){
 document.addEventListener("click", e=>{
   if(e.target.closest("[data-clear]")){
     if(confirm("清空这台设备上的演示记录？")){
-      data.records = []; save();
+      data.records = []; data.recommendations=[]; save();
       S.screen="home"; render();
     }
   }
@@ -703,6 +726,33 @@ document.addEventListener("click", e=>{
 
 
 /* v0.25: persistent sessions, catalog management and versioned local backups. */
+function validWebRound(r){
+  const text=v=>typeof v==='string'&&v.length>0&&v.length<=100;
+  if(!r||!text(r.id)||!Number.isSafeInteger(r.shownAt)||r.shownAt<0||r.demo!==true||
+    !['LOW','MID','HIGH'].includes(r.band)||!Array.isArray(r.candidateIds)||r.candidateIds.length<1||r.candidateIds.length>3||
+    !r.candidateIds.every(text)||new Set(r.candidateIds).size!==r.candidateIds.length||!['SHOWN','SELECTED','SKIPPED'].includes(r.outcome))return false;
+  if(r.outcome==='SHOWN')return r.resolvedAt==null&&r.selectedActionId==null&&r.sessionId==null;
+  if(!Number.isSafeInteger(r.resolvedAt)||r.resolvedAt<r.shownAt)return false;
+  return r.outcome==='SELECTED'?r.candidateIds.includes(r.selectedActionId)&&text(r.sessionId):r.selectedActionId==null&&r.sessionId==null;
+}
+function ensureWebRound(){
+  if(!S.recs.length||data.session)return;
+  if(S.roundId&&data.recommendations.some(r=>r.id===S.roundId))return;
+  const now=Date.now();const round={id:'r_'+now+'_'+Math.random().toString(36).slice(2),shownAt:now,
+    candidateIds:S.recs.map(a=>a.id),band:assess().band,demo:true,outcome:'SHOWN',selectedActionId:null,sessionId:null,resolvedAt:null};
+  commitWeb({...data,recommendations:[...data.recommendations,round].slice(-5000)});S.roundId=round.id;
+}
+function skipWebRound(){
+  if(!S.roundId)return;
+  const recommendations=data.recommendations.map(r=>r.id===S.roundId&&r.outcome==='SHOWN'?{...r,outcome:'SKIPPED',resolvedAt:Math.max(Date.now(),r.shownAt)}:r);
+  commitWeb({...data,recommendations});
+}
+function webRecommendationCsv(){
+  const completed=new Set(data.records.map(r=>r.sessionId));
+  const cell=v=>'"'+String(v==null?'':v).replace(/^[=+@-]/,"'$&").replace(/"/g,'""')+'"';
+  return '\uFEFFround_id,shown_at,source,band,candidate_ids,outcome,selected_action,session_id,resolved_at,feedback_saved\r\n'+
+    data.recommendations.map(r=>[r.id,r.shownAt,'DEMO',r.band,r.candidateIds.join('|'),r.outcome,r.selectedActionId,r.sessionId,r.resolvedAt,!!r.sessionId&&completed.has(r.sessionId)].map(cell).join(',')).join('\r\n');
+}
 function validWebAction(a){
   return a && typeof a.id==='string' && /^[A-Za-z0-9_-]{1,100}$/.test(a.id) &&
     typeof a.t==='string'&&a.t.trim().length>0&&a.t.length<=80&&Number.isInteger(a.m)&&a.m>=1&&a.m<=10&&
@@ -734,7 +784,12 @@ function parseWebData(saved,strict){
   const demo=saved.demo||{};const finite=(v,f)=>Number.isFinite(v)?v:f;
   let session=saved.session||null;
   if(session&&(!validWebSession(session)||sessionIds.includes(session.id))){if(strict) throw Error('行动进度不正确');session=null;}
-  return {actions:actions.map(a=>({...a})),records,favorites:flags('favorites'),archived:flags('archived'),session,
+  const rounds=saved.recommendations===undefined?[]:saved.recommendations;
+  if(!Array.isArray(rounds)||rounds.length>5000)throw Error('推荐记录不正确');
+  const recommendations=rounds.filter(validWebRound);
+  if(strict&&recommendations.length!==rounds.length)throw Error('推荐记录不完整');
+  if(new Set(recommendations.map(r=>r.id)).size!==recommendations.length)throw Error('推荐轮次重复');
+  return {actions:actions.map(a=>({...a})),records,favorites:flags('favorites'),archived:flags('archived'),session,recommendations,
     nudgeOn:typeof saved.nudgeOn==='boolean'?saved.nudgeOn:true,
     demo:{focus:Math.max(0,finite(demo.focus,125)),screen:Math.max(0,Math.min(60,finite(demo.screen,45))),
     hour:Math.max(0,Math.min(23,Math.floor(finite(demo.hour,new Date().getHours())))),
@@ -768,7 +823,7 @@ function finishWebSession(){
 function saveWebFeedback(){
   const s=data.session;if(!s||s.phase!=='FEEDBACK'||!Number.isInteger(S.rateSel)||S.rateSel<1||S.rateSel>5)return;
   const now=new Date();let records=data.records;
-  if(!records.some(r=>r.sessionId===s.id))records=[...records,{id:s.action.id,action:{...s.action},sessionId:s.id,rate:S.rateSel,hour:now.getHours(),ts:now.getTime()}];
+  if(!records.some(r=>r.sessionId===s.id))records=[...records,{id:s.action.id,action:{...s.action},sessionId:s.id,band:s.band,rate:S.rateSel,hour:now.getHours(),ts:now.getTime()}];
   commitWeb({...data,records,session:null});stopTimer();S.flash='记下来了。';S.screen='graph';S.action=null;render();
 }
 function viewActionEditor(){
@@ -806,7 +861,7 @@ document.addEventListener('change',async e=>{
   catch(err){S.preview=null;S.flash='无法导入：'+err.message;}render();
 });
 document.addEventListener('click',e=>{
-  const el=e.target.closest('[data-edit-action],[data-save-action],[data-favorite],[data-archive],[data-pool-mode],[data-resume-session],[data-pause-session],[data-export-backup],[data-confirm-import],[data-undo-import]');
+  const el=e.target.closest('[data-edit-action],[data-save-action],[data-favorite],[data-archive],[data-pool-mode],[data-resume-session],[data-pause-session],[data-export-backup],[data-export-recommendations],[data-confirm-import],[data-undo-import]');
   if(!el)return;
   try{
     if(el.hasAttribute('data-edit-action')){S.editId=el.dataset.editAction==='new'?null:el.dataset.editAction;S.screen='edit';}
@@ -827,6 +882,8 @@ document.addEventListener('click',e=>{
       commitWeb({...data,session:next});resumeAction();return;
     }else if(el.hasAttribute('data-export-backup')){
       const url=URL.createObjectURL(new Blob([webBackupText()],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='huixue-web-backup.json';a.click();URL.revokeObjectURL(url);S.flash='备份已交给浏览器保存。';
+    }else if(el.hasAttribute('data-export-recommendations')){
+      const url=URL.createObjectURL(new Blob([webRecommendationCsv()],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='huixue-demo-recommendations.csv';a.click();URL.revokeObjectURL(url);
     }else if(el.hasAttribute('data-confirm-import')){if(S.preview&&confirm('替换本浏览器中的业务数据？导入前会保留副本。'))importWebBackup(S.preview);}
     else if(el.hasAttribute('data-undo-import')){
       const old=localStorage.getItem(KEY+'_before_import');if(!old)throw Error('还没有导入前的副本');

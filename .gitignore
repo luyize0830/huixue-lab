@@ -4,6 +4,12 @@
 /.idea/
 .DS_Store
 /build
+**/build/
+*.jks
+*.keystore
+*.p12
+signing.properties
+signing.json
 /captures
 .externalNativeBuild
 .cxx

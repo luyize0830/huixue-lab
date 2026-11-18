@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.sp
 import com.example.blehr.logic.ExperimentReport
 import com.example.blehr.logic.ReportData
 import com.example.blehr.logic.ReportStat
+import com.example.blehr.logic.RecommendationRound
+import com.example.blehr.logic.RecommendationLog
 import com.example.blehr.model.ActionItem
 import com.example.blehr.model.ExperimentRecord
 
@@ -42,6 +44,7 @@ import com.example.blehr.model.ExperimentRecord
 fun ReportScreen(
     records: List<ExperimentRecord>,
     pool: List<ActionItem>,
+    recommendations: List<RecommendationRound> = emptyList(),
     onBack: () -> Unit
 ) {
     val ctx = LocalContext.current
@@ -77,6 +80,22 @@ fun ReportScreen(
                 color = Look.InkFaint,
                 fontSize = 11.sp
             )
+            Spacer(Modifier.height(12.dp))
+
+            SectionLabel("首页推荐的采纳情况")
+            RCard {
+                val metrics = RecommendationLog.metrics(recommendations, records)
+                Text("真实展示 ${metrics.shown} 轮 · 选择 ${metrics.selected} 轮 · 跳过 ${metrics.skipped} 轮", color = Look.Ink, fontSize = 13.sp)
+                Text("接受率 ${RecommendationLog.percent(metrics.acceptance)} · 反馈完成率 ${RecommendationLog.percent(metrics.feedbackRate)}", color = Look.Accent, fontSize = 13.sp)
+                Text("演示 ${metrics.demo} 轮，单独保留。接受率 = 选择 / 真实展示；反馈完成率 = 已提交反馈 / 选择。", color = Look.InkFaint, fontSize = 11.sp)
+                Text(RecommendationLog.SCOPE, color = Look.InkFaint, fontSize = 11.sp)
+                TextButton(onClick = {
+                    ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                        type = "text/csv"
+                        putExtra(Intent.EXTRA_TEXT, RecommendationLog.csv(recommendations, records))
+                    }, "导出推荐记录"))
+                }) { Text("导出推荐记录（CSV）") }
+            }
             Spacer(Modifier.height(12.dp))
 
             RCard {

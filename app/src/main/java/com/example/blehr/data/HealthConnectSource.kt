@@ -12,10 +12,10 @@ import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
+import androidx.health.connect.client.request.AggregateRequest
+import com.example.blehr.logic.SleepWindow
 import androidx.health.connect.client.time.TimeRangeFilter
-import java.time.Duration
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 
 /**
@@ -44,7 +44,7 @@ object HealthConnectSource {
     )
 
     fun status(ctx: Context): Int = runCatching {
-        HealthConnectClient.getSdkStatus(ctx, "com.example.blehr")
+        HealthConnectClient.getSdkStatus(ctx)
     }.getOrDefault(HealthConnectClient.SDK_UNAVAILABLE)
 
     fun isAvailable(ctx: Context): Boolean =
@@ -87,34 +87,26 @@ object HealthConnectSource {
         }
 
         val zone = ZoneId.systemDefault()
-        val startOfToday = LocalDate.now(zone).atStartOfDay(zone).toInstant().toEpochMilli()
+        val instant = Instant.ofEpochMilli(now)
+        val startOfToday = instant.atZone(zone).toLocalDate().atStartOfDay(zone).toInstant()
 
         val steps = runCatching {
-            val resp = c.readRecords(
-                ReadRecordsRequest(
-                    recordType = StepsRecord::class,
-                    timeRangeFilter = TimeRangeFilter.between(
-                        Instant.ofEpochMilli(startOfToday),
-                        Instant.ofEpochMilli(now)
-                    )
-                )
-            )
-            resp.records.sumOf { it.count }.toInt()
+            val result = c.aggregate(AggregateRequest(metrics = setOf(StepsRecord.COUNT_TOTAL),
+                timeRangeFilter = TimeRangeFilter.between(startOfToday, instant)))
+            result[StepsRecord.COUNT_TOTAL]?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt()
         }.onFailure { Log.w(TAG, "steps failed: ${it.message}") }.getOrNull()
 
         val sleep = runCatching {
-            val from = Instant.ofEpochMilli(now - 36L * 60 * 60 * 1000)
-            val resp = c.readRecords(
-                ReadRecordsRequest(
-                    recordType = SleepSessionRecord::class,
-                    timeRangeFilter = TimeRangeFilter.after(from)
-                )
-            )
-            // 取昨晚最长的那一段（午睡很短，不该算进"昨夜睡眠"）
-            val longest = resp.records.maxByOrNull {
-                Duration.between(it.startTime, it.endTime).toMinutes()
-            } ?: return@runCatching null
-            Duration.between(longest.startTime, longest.endTime).toMinutes().toInt()
+            val window = SleepWindow.range(instant, zone)
+            val intervals = mutableListOf<SleepWindow.Interval>()
+            var token: String? = null
+            do {
+                val resp = c.readRecords(ReadRecordsRequest(recordType = SleepSessionRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(window.start, window.end), pageToken = token))
+                intervals += resp.records.map { SleepWindow.Interval(it.startTime, it.endTime) }
+                token = resp.pageToken
+            } while (token != null)
+            SleepWindow.minutes(intervals, instant, zone)
         }.onFailure { Log.w(TAG, "sleep failed: ${it.message}") }.getOrNull()
 
         return WearableSnapshot(

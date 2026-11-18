@@ -22,6 +22,45 @@ function boot(stored = null) {
   return expression => vm.runInContext(expression, context, { timeout: 2000 });
 }
 
+test('recommendation impressions are deduplicated and selection survives leaving the page', () => {
+  const run=boot();
+  assert.equal(run(`(() => {
+    S.screen='rec';viewRec();viewRec();
+    if(data.recommendations.length!==1)return false;
+    startAction(S.recs[0]);skipWebRound();finishWebSession();S.rateSel=4;saveWebFeedback();
+    const r=data.recommendations[0];
+    return r.demo&&r.outcome==='SELECTED'&&r.sessionId===data.records[0].sessionId&&webRecommendationCsv().includes('"DEMO"');
+  })()`),true);
+});
+
+test('skips survive backup and web imports cannot pretend to contain real sensor trials', () => {
+  const run=boot();
+  assert.equal(run(`(() => {
+    S.screen='rec';viewRec();skipWebRound();
+    const restored=decodeWebBackup(webBackupText());
+    if(restored.recommendations[0].outcome!=='SKIPPED')return false;
+    const backup=JSON.parse(webBackupText());backup.data.recommendations[0].demo=false;
+    try{decodeWebBackup(JSON.stringify(backup));return false}catch(e){return true}
+  })()`),true);
+});
+
+test('home recommendations respect five minutes and learning uses the starting band', () => {
+  const run=boot();
+  assert.equal(run(`(() => {
+    S.screen='rec';viewRec();if(S.recs.some(a=>a.m>5))return false;
+    const band=assess().band;startAction(S.recs[0]);finishWebSession();S.rateSel=5;saveWebFeedback();
+    return data.records[0].band===band;
+  })()`),true);
+});
+
+test('covered days are calculated from dates rather than record count', () => {
+  const run=boot();
+  assert.equal(run(`(() => {
+    data.records=Array.from({length:12},()=>({id:'water',rate:4,hour:12,ts:1800000000000}));
+    return viewGraph().includes('<b>1</b><span>覆盖天数</span>');
+  })()`),true);
+});
+
 test('normal startup and the four tabs render', () => {
   assert.equal(boot()(`['home','pool','graph','mine'].every(s => {
     S.screen=s; return typeof view()==='string';

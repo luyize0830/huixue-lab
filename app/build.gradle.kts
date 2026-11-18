@@ -3,6 +3,14 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
+val distributionStore = providers.environmentVariable("HUIXUE_STORE_FILE").orNull
+
+composeCompiler {
+    // AGP's built-in Kotlin 2.2.10 has no published compose-group-mapping artifact.
+    // This only disables extra Compose stack-trace mappings; normal R8 mappings remain.
+    includeComposeMappingFile.set(false)
+}
+
 android {
     namespace = "com.example.blehr"
     compileSdk {
@@ -13,14 +21,25 @@ android {
         applicationId = "com.example.blehr"
         minSdk = 26
         targetSdk = 37
-        versionCode = 27
-        versionName = "0.26"
+        versionCode = 28
+        versionName = "0.27"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (distributionStore != null) {
+            create("distribution") {
+                storeFile = file(distributionStore)
+                storePassword = providers.environmentVariable("HUIXUE_STORE_PASSWORD").get()
+                keyAlias = providers.environmentVariable("HUIXUE_KEY_ALIAS").get()
+                keyPassword = providers.environmentVariable("HUIXUE_KEY_PASSWORD").get()
+            }
+        }
+    }
     buildTypes {
         release {
+            if (distributionStore != null) signingConfig = signingConfigs.getByName("distribution")
             optimization {
                 enable = true
                 packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
@@ -55,6 +74,9 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 
 // Windows 的非 ASCII 输出路径可能让 Gradle 测试进程找不到类；允许本机单独指定构建目录。

@@ -49,6 +49,7 @@ import com.example.blehr.data.ProfileRepo
 import com.example.blehr.data.ProfileStore
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,6 +68,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -88,6 +90,7 @@ import com.example.blehr.data.VoiceSettings
 import com.example.blehr.data.WearableSnapshot
 import com.example.blehr.logic.Recommender
 import com.example.blehr.logic.RecommendationConstraints
+import com.example.blehr.logic.RecommendationRound
 import com.example.blehr.logic.MascotMood
 import com.example.blehr.logic.MoodRule
 import com.example.blehr.logic.MusicSuggestion
@@ -111,6 +114,7 @@ import com.example.blehr.model.SensorSnapshot
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalTime
+import java.util.UUID
 import kotlin.math.roundToInt
 
 // ---------------- 配色 ----------------
@@ -243,6 +247,7 @@ fun HuixueApp(
     val screenMinutes = if (usingReal) usage.foregroundMinutesLastHour else manualScreen
 
     var charPending by remember { mutableStateOf(InitiativeStore.pending(ctx)) }
+    var refreshTick by remember { mutableStateOf(0L) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -250,29 +255,8 @@ fun HuixueApp(
             ActivityTracker.refresh()
             HealthRepo.refresh(ctx)
             hour = LocalTime.now().hour
-            // 她会不会主动来找你：规则在 Initiative，落盘在 InitiativeStore
-            val s = StateEngine.assess(
-                SensorSnapshot(
-                    restingHr = restingHr,
-                    focusMinutes = focusMinutes,
-                    screenMinutesLastHour = screenMinutes,
-                    hourOfDay = hour,
-                    sedentaryMinutes = activity.stillMinutes,
-                    sleepMinutesLastNight = wearable.sleepMinutesLastNight
-                )
-            )
-            // 她还没上线时不主动开口：写了 pending 也显示不出来，
-            // 只会留下一条"发不出去的话"。没接模型的用户走提醒开关那条线。
-            if (llmKey.isNotBlank()) {
-                InitiativeStore.maybeReach(
-                    ctx = ctx,
-                    now = System.currentTimeMillis(),
-                    hour = hour,
-                    score = s.score,
-                    notify = true
-                )
-            }
-            charPending = InitiativeStore.pending(ctx)
+            // Recomposition consumes the newly published repositories before deciding to notify.
+            refreshTick++
             delay(30_000L)
         }
     }
@@ -284,6 +268,7 @@ fun HuixueApp(
     }
 
     val snapshot = SensorSnapshot(
+        heartRate = heartRate,
         restingHr = restingHr,
         focusMinutes = focusMinutes,
         screenMinutesLastHour = screenMinutes,
@@ -292,10 +277,17 @@ fun HuixueApp(
         sleepMinutesLastNight = wearable.sleepMinutesLastNight
     )
     val assessment = StateEngine.assess(snapshot)
-    fun startAction(action: ActionItem, pairStart: Long? = null) {
+    // Keyed effects use this composition's assessment; a Unit loop would retain its initial inputs.
+    LaunchedEffect(assessment.score, hour, refreshTick, llmEnabled, llmKey, usingReal) {
+        if (usingReal && llmEnabled && llmKey.isNotBlank()) {
+            InitiativeStore.maybeReach(ctx, System.currentTimeMillis(), hour, assessment.score, notify = true)
+        }
+        charPending = InitiativeStore.pending(ctx)
+    }
+    fun startAction(action: ActionItem, pairStart: Long? = null, round: RecommendationRound? = null) {
         perform {
-            if (Repo.session == null) Repo.setSession(ActionSession.start(action, assessment.band, heartRate,
-                System.currentTimeMillis(), SystemClock.elapsedRealtime(), SessionClock.boot(ctx), pairStart))
+            if (Repo.session == null) Repo.startSession(ActionSession.start(action, round?.band ?: assessment.band, heartRate,
+                System.currentTimeMillis(), SystemClock.elapsedRealtime(), SessionClock.boot(ctx), pairStart), round)
             screen = restoredScreen()
         }
     }
@@ -324,7 +316,7 @@ fun HuixueApp(
 
     // 决定"要不要主动说话"，并把文案预置好；真正的发送由系统闹钟触发的广播完成，
     // 这样用户不打开 App 时提醒也能按纪律发出去。
-    LaunchedEffect(assessment.score, activity.stillMinutes, Repo.records.size) {
+    LaunchedEffect(assessment.score, activity.stillMinutes, Repo.records.size, usingReal, hour) {
         val top = Recommender.recommend(assessment.band, Repo.pool, Repo.records, 1).firstOrNull()
         val nudge = NudgePlanner.plan(
             assessment = assessment,
@@ -333,7 +325,10 @@ fun HuixueApp(
             lastNudgeAt = Reminders.lastNudgeAt(ctx),
             now = System.currentTimeMillis()
         )
-        Reminders.stash(ctx, nudge)
+        Reminders.stash(ctx, if (usingReal) nudge else null)
+    }
+    // Do not postpone the first alarm every time a sensor changes.
+    LaunchedEffect(Unit) {
         if (Reminders.isEnabled(ctx)) NudgeScheduler.start(ctx)
     }
     val accent = when (assessment.band) {
@@ -391,7 +386,7 @@ fun HuixueApp(
                     activity = activity,
                     onRequestActivity = onRequestActivity,
                     onToggleDemo = { forceDemo = !forceDemo },
-                    onNeedBreak = { screen = Screen.Recommend },
+                    onNeedBreak = { screen = if (Repo.session == null) Screen.Recommend else restoredScreen() },
                     onOpenChat = { screen = Screen.Chat },
                     wearable = wearable,
                     onRequestHealth = requestHealth,
@@ -410,7 +405,10 @@ fun HuixueApp(
                     pool = Repo.pool,
                     records = Repo.records,
                     hour = hour,
-                    onPick = { action -> startAction(action) },
+                    demo = !usingReal,
+                    onShown = { round -> perform { Repo.showRecommendation(round) } },
+                    onDismiss = { id -> perform { Repo.skipRecommendation(id) } },
+                    onPick = { action, round -> startAction(action, round = round) },
                     onBack = { screen = Screen.Home }
                 )
 
@@ -521,6 +519,7 @@ fun HuixueApp(
                 is Screen.Report -> ReportScreen(
                     records = Repo.records,
                     pool = Repo.allActions,
+                    recommendations = Repo.snapshot.recommendations,
                     onBack = { screen = Screen.Mine }
                 )
 
@@ -590,7 +589,7 @@ fun HuixueApp(
                             Tab.HOME -> Screen.Home
                         }
                     },
-                    onStart = { screen = Screen.Recommend }
+                    onStart = { screen = if (Repo.session == null) Screen.Recommend else restoredScreen() }
                 )
             }
         }
@@ -718,7 +717,7 @@ private fun StressCard(stress: StressResult, onOpenMusic: () -> Unit) {
             Spacer(Modifier.height(8.dp))
             Text(
                 if (stress.measuredPhysiology) {
-                    "这次有心率变异率参与，比只看作息准一些。"
+                    "这次有心率或 R-R 间期参与，具体数据见依据；仍然只是状态推断。"
                 } else {
                     "没有手环的生理数据，这只是按作息和行为估的。"
                 },
@@ -827,7 +826,7 @@ private fun ScoreRing(score: Int, color: Color, size: Dp = 86.dp) {
             )
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("$score", fontSize = 25.sp, fontWeight = FontWeight.SemiBold, color = Look.Ink)
+            Text("$score", modifier = Modifier.testTag("state-score"), fontSize = 25.sp, fontWeight = FontWeight.SemiBold, color = Look.Ink)
             Text("/ 100", fontSize = 10.sp, color = Look.InkFaint)
         }
     }
@@ -1113,7 +1112,7 @@ private fun HomeScreen(
                             Spacer(Modifier.height(4.dp))
                         }
                         Text(
-                            "来自 Health Connect，只读。睡眠时长目前只用于展示，还没有进状态模型——不想拿没验证过的信号算分。",
+                            "来自 Health Connect，只读。昨夜睡眠参与状态评分；不足 7 小时按规则调整。没有数据时跳过这一项，不当作睡眠充足。",
                             fontSize = 11.sp, color = TextDim.copy(alpha = 0.75f)
                         )
                     }
@@ -1254,23 +1253,32 @@ private fun RecommendScreen(
     pool: List<ActionItem>,
     records: List<ExperimentRecord>,
     hour: Int,
-    onPick: (ActionItem) -> Unit,
+    demo: Boolean,
+    onShown: (RecommendationRound) -> Unit,
+    onDismiss: (String) -> Unit,
+    onPick: (ActionItem, RecommendationRound) -> Unit,
     onBack: () -> Unit
 ) {
     var batch by remember { mutableStateOf(0) }
     // 换一批时排除刚看过的那三个，否则"换"完还是同一批，用户会觉得没在听
     var excluded by remember { mutableStateOf(emptySet<String>()) }
-    val lateNight = hour >= 23 
-
- hour < 5
-    val recs = remember(band, records.size, pool.size, batch, hour) {
+    val lateNight = hour >= 23 || hour < 5
+    val recs = remember(band, records, pool, batch, hour) {
         Recommender.recommend(
             band, pool, records, limit = 3,
             constraints = RecommendationConstraints(
+                maxMinutes = 5,
                 nightMode = lateNight,
                 excludeIds = excluded
             )
         )
+    }
+    val round = remember(recs, demo, band, batch) {
+        RecommendationRound(UUID.randomUUID().toString(), System.currentTimeMillis(), recs.map { it.action.id }, band, demo)
+    }
+    DisposableEffect(round.id) {
+        if (recs.isNotEmpty()) onShown(round)
+        onDispose { if (recs.isNotEmpty()) onDismiss(round.id) }
     }
 
     Column(
@@ -1285,7 +1293,7 @@ private fun RecommendScreen(
         Spacer(Modifier.height(18.dp))
 
         if (recs.isEmpty()) {
-            Text("回血池是空的，先去「我的回血池」加几个你想做的事。", color = TextDim, fontSize = 14.sp)
+            Text("这轮没有符合条件的新行动了。可以返回回血池挑选，或添加 5 分钟内的小事。", color = TextDim, fontSize = 14.sp)
         }
 
         recs.forEach { rec ->
@@ -1294,7 +1302,7 @@ private fun RecommendScreen(
                     .fillMaxWidth()
                     .padding(bottom = 12.dp)
                     .border(1.dp, Look.Hair, RoundedCornerShape(16.dp))
-                    .clickable { onPick(rec.action) },
+                    .clickable { onPick(rec.action, round) },
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = CardBg)
             ) {

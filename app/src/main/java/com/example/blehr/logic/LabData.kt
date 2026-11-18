@@ -53,7 +53,8 @@ data class LabData(
     val records: List<ExperimentRecord> = emptyList(),
     val favorites: Set<String> = emptySet(),
     val archived: Set<String> = emptySet(),
-    val session: ActionSession? = null
+    val session: ActionSession? = null,
+    val recommendations: List<RecommendationRound> = emptyList()
 ) {
     fun withFeedback(rating: Int, hrAfter: Int?, now: Long): LabData {
         require(rating in 1..5)
@@ -128,6 +129,7 @@ object LabCodec {
         .put("records", JSONArray(d.records.map(::recordJson)))
         .put("favorites", JSONArray(d.favorites.toList())).put("archived", JSONArray(d.archived.toList()))
         .put("session", d.session?.let(::sessionJson) ?: JSONObject.NULL)
+        .put("recommendations", JSONArray(d.recommendations.map(RecommendationLog::json)))
 
     fun decode(o: JSONObject): LabData {
         val aa = o.getJSONArray("actions"); val rr = o.getJSONArray("records")
@@ -146,6 +148,12 @@ object LabCodec {
         require(sessions.distinct().size == sessions.size) { "实验记录重复" }
         val session = if (o.isNull("session")) null else session(o.getJSONObject("session"))
         require(session == null || session.id !in sessions) { "该会话已经记录过反馈" }
-        return LabData(actions, records, flags("favorites"), flags("archived"), session)
+        val recommendations = if (!o.has("recommendations")) emptyList() else {
+            val arr = o.getJSONArray("recommendations")
+            require(arr.length() <= RecommendationLog.MAX_ROUNDS) { "推荐记录过多" }
+            (0 until arr.length()).map { RecommendationLog.decode(arr.getJSONObject(it)) }
+        }
+        require(recommendations.map { it.id }.distinct().size == recommendations.size) { "推荐轮次重复" }
+        return LabData(actions, records, flags("favorites"), flags("archived"), session, recommendations)
     }
 }
