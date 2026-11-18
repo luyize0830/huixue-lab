@@ -40,10 +40,10 @@ android {
     buildTypes {
         release {
             if (distributionStore != null) signingConfig = signingConfigs.getByName("distribution")
-            optimization {
-                enable = true
-                packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
-            }
+            // Optimize the whole application with Android's standard access rules.
+            // A dependency-only scope caused IllegalAccessError during AndroidX startup.
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
         }
     }
     buildFeatures {
