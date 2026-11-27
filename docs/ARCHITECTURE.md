@@ -1,4 +1,8 @@
-# v0.27 架构
+# v0.28 架构
+
+v0.28 新增 F-50：系统文件选择器 → PersonaDocumentReader（有界 IO 读取）→ PersonaDocument（纯逻辑 TXT/MD/DOCX 解析）→ 预览 → 自定义草稿 → PersonaStore 原子保存。模型请求沿用当前设定注入，未保存的草稿不会进入请求。当前设定参与业务备份；局部撤销副本不导出，业务恢复时清除。
+
+原有状态、推荐和行动架构如下；R1 的 F-44–F-49 来源迁移与主流程重构仍待实现。本版文件导入只在 Android 提供，网页继续为不接模型的演示。
 
 ```mermaid
 flowchart TD

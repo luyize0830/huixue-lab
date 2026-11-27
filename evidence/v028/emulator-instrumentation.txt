@@ -1,0 +1,7 @@
+com.example.blehr.data.BackupPersistenceTest:.......
+com.example.blehr.ui.HomeStateTest:..
+com.example.blehr.ui.PersonaImportTest:.....
+
+Time: 16.742
+
+OK (14 tests)

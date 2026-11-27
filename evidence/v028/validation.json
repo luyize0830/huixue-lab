@@ -1,0 +1,50 @@
+{
+  "version": "0.28",
+  "versionCode": 29,
+  "date": "2026-11-27",
+  "codeCommit": "e0fb99f1992a812af4058cd13ebc3829754fc95d",
+  "jvmTests": 285,
+  "jvmClasses": 32,
+  "webTests": 24,
+  "instrumentationTests": 14,
+  "instrumentationRuns": {
+    "isolatedEmulatorAndroid17": "14/14",
+    "physicalDevice": "not run"
+  },
+  "artifacts": [
+    {
+      "name": "huixue-lab-v0.28-release.apk",
+      "bytes": 4641482,
+      "sha256": "18b8ec96c1c306ef2804c4bf00966fcbe4c9498ab95b8725a6b40058479d1547"
+    },
+    {
+      "name": "huixue-lab-v0.28-debug-compat.apk",
+      "bytes": 18773593,
+      "sha256": "bdc7b943dc89d9b65d0ede11065b7de5c7742da5323d5b129baf7792a632a68d"
+    }
+  ],
+  "releaseSmoke": {
+    "platform": "isolated Android 17 emulator",
+    "signed": true,
+    "debuggable": false,
+    "result": "passed",
+    "checks": [
+      "cold startup",
+      "system picker imports Markdown",
+      "system picker imports DOCX",
+      "preview survives rotation",
+      "confirmation edits draft only",
+      "unsaved exit confirmation",
+      "save persists after force-stop",
+      "undo restores previous saved persona",
+      "unsupported file rejected"
+    ]
+  },
+  "remaining": [
+    "Real DeepSeek conversation style and long conversation consistency",
+    "Physical-device import and older Android versions",
+    "Health Connect/BLE and long-running notifications",
+    "F-44 through F-49 data provenance and redesigned main flow",
+    "10 interviews and 8–12 participants over 14 days"
+  ]
+}

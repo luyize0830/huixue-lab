@@ -6,7 +6,7 @@
 
 用户在 2026-11-03 明确要求：**以后每次修改后都同步更新到 GitHub**。所以任何一次改动，收尾时按这个顺序走完，不要停在本地：
 
-1. `.\gradlew.bat testDebugUnitTest` —— 单测必须全绿（当前 267 个用例），不绿就不提交。
+1. `.\gradlew.bat testDebugUnitTest` —— 单测必须全绿（当前 285 个用例），不绿就不提交。
 2. `git add -A && git commit -m "<type>(vX.YZ): <做了什么、为什么>"` —— 提交信息写清"改了什么"和"为什么"。
 3. `git push origin main` —— 推到主分支。PowerShell 里 git 把进度写到 stderr，会显示 `exit code: 1`，看最后一行 `xxx..yyy  main -> main` 才算成功。
 4. 如果这次改了**用户能看见的东西**（新功能、界面、文案、版本号），还要补齐：
@@ -45,4 +45,4 @@
 
 用户在 2026-11-27 委托重新规划产品。后续开发先读 `docs/product/README.md`，按其中的 PRD、任务依赖及验收推进：聚焦学习间隙的个人休息助手，先解决真实/演示来源和历史迁移，再做无设备首用及「现在 / 记录 / 我的」主流程。
 
-F-44 至 F-49 是规划预留编号，未经验收不得标为已实现。`docs/product/prototype/index.html` 仅为设计原型，不能当作 Android 功能或真实用户效果证据。当前发布版及参赛文档仍按 v0.27 描述；将来的正式功能发布继续遵循上面的同步要求。
+F-44 至 F-49 是规划预留编号，未经验收不得标为已实现。`docs/product/prototype/index.html` 仅为设计原型，不能当作 Android 功能或真实用户效果证据。当前发布版为 v0.28，包含用户随后明确要求的 F-50 设定文档导入与可选陪伴风格（见 docs/product/07-persona-import.md）；F-44–F-49 仍待实现。将来的正式功能发布继续遵循上面的同步要求。
