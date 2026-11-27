@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>回血实验室 · 交互原型</title>
+  <style>
+    :root {
+      font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+      color: #21382d;
+      background: #e9ebe1;
+      --paper: #faf8f0;
+      --ink: #21382d;
+      --muted: #526657;
+      --teal: #204c3e;
+      --line: #d7ddd0;
+      --soft: #e4ebe0;
+      --white: #fdfcf7;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; line-height: 1.6; }
+    button, input { font: inherit; }
+    button { color: inherit; cursor: pointer; }
+    button:focus-visible, input:focus-visible + span, summary:focus-visible {
+      outline: 2px solid var(--teal); outline-offset: 3px;
+    }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: 2rem; letter-spacing: -.055em; line-height: 1.27; font-weight: 750; }
+    h2 { font-size: 1.13rem; line-height: 1.4; }
+    h1:focus { outline: none; }
+    .shell {
+      max-width: 968px; min-height: 100svh; margin: auto; padding: 32px 26px;
+      display: grid; grid-template-columns: 1fr 460px; gap: clamp(24px, 8vw, 96px); align-items: center;
+    }
+    .intro { padding: 0 0 20px 16px; }
+    .intro .brand { margin-bottom: 24px; }
+    .intro-title { font-size: clamp(2.4rem, 4.8vw, 4.25rem); line-height: 1.12; letter-spacing: -.07em; font-weight: 750; }
+    .intro-copy { max-width: 17em; margin-top: 22px; color: var(--muted); }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+    .mark { width: 27px; height: 27px; border-radius: 9px; display: grid; place-items: center; background: var(--teal); color: #fff; flex: none; }
+    .mark::before { content: ""; width: 11px; height: 7px; border: 2px solid currentColor; border-top: 0; border-radius: 1px 1px 10px 10px; transform: rotate(-12deg); }
+    .app {
+      min-width: 0; width: 100%; min-height: 730px; display: flex; flex-direction: column;
+      border: 1px solid #d1d6ca; border-radius: 27px; background: var(--paper);
+      box-shadow: 0 18px 54px #24372912;
+    }
+    .notice {
+      position: sticky; top: 0; z-index: 1; padding: 9px 12px; text-align: center;
+      background: var(--teal); color: #fefcf3; border-radius: 26px 26px 0 0;
+      font-weight: 650; font-size: .75rem; letter-spacing: .045em;
+    }
+    .app-header { padding: 17px 22px 0; font-size: .83rem; }
+    main { flex: 1; padding: 18px 22px 22px; min-width: 0; }
+    .lead { margin-top: 6px; color: var(--muted); font-size: .91rem; }
+    .filters { display: grid; gap: 11px; margin-top: 19px; }
+    fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+    legend { margin-bottom: 5px; padding: 0; font-size: .81rem; font-weight: 700; }
+    .choices { display: flex; flex-wrap: wrap; gap: 6px; }
+    .choices label { position: relative; cursor: pointer; }
+    .choices input {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+    }
+    .choices span {
+      display: grid; place-items: center; min-width: 48px; min-height: 48px; padding: 4px 12px;
+      border: 1px solid var(--line); border-radius: 8px; background: var(--white);
+      font-size: .8125rem; white-space: nowrap;
+    }
+    .choices input:checked + span { background: var(--soft); border-color: #759380; font-weight: 700; }
+    .suggestion { margin-top: 19px; padding: 16px; border: 1px solid #c9d8c7; border-radius: 14px; background: #edf1e7; }
+    .meta { color: #365a46; font-weight: 700; font-size: .75rem; }
+    .suggestion h2 { margin: 4px 0 6px; font-size: 1.24rem; }
+    .step { font-size: .9rem; overflow-wrap: anywhere; }
+    .reason { color: var(--muted); font-size: .79rem; margin-top: 6px; }
+    .suggestion-actions { display: flex; gap: 9px; margin-top: 12px; flex-wrap: wrap; }
+    .button {
+      display: inline-flex; justify-content: center; align-items: center; min-width: 48px; min-height: 48px;
+      padding: 8px 13px; border: 1px solid var(--line); border-radius: 9px;
+      background: var(--white); font-size: .87rem; font-weight: 700; text-align: center;
+    }
+    .button:hover, .choices label:hover span { border-color: #73917b; }
+    .primary { color: #fff; background: var(--teal); border-color: var(--teal); }
+    .primary:hover { background: #153d30; border-color: #153d30; }
+    .grow { flex: 1; }
+    .wide { width: 100%; }
+    .quiet { background: transparent; }
+    .alternatives { margin-top: 10px; }
+    .alternatives > .button { color: var(--teal); }
+    .alternative-list { display: grid; gap: 6px; margin-top: 6px; }
+    .alternative-list .button { justify-content: space-between; gap: 8px; text-align: left; }
+    .alternative-list small { flex: none; color: var(--muted); }
+    .tabs {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px;
+      padding: 8px 15px max(8px, env(safe-area-inset-bottom));
+      border-top: 1px solid var(--line);
+    }
+    .tabs button {
+      min-width: 48px; min-height: 48px; border: 0; border-radius: 9px; background: transparent;
+      color: var(--muted); font-size: .86rem; font-weight: 600;
+    }
+    .tabs button:hover, .tabs [aria-current="page"] { background: var(--soft); color: var(--teal); }
+    .tabs [aria-current="page"] { font-weight: 750; }
+    .panel { margin-top: 20px; padding: 17px; border: 1px solid var(--line); border-radius: 14px; background: var(--white); }
+    .panel p + p, .panel h2 + p { margin-top: 7px; }
+    .muted { color: var(--muted); font-size: .9rem; }
+    .panel .button { margin-top: 14px; }
+    .clock-area { padding: 25px 12px 21px; text-align: center; }
+    .clock { color: var(--teal); font-size: clamp(3.8rem, 19vw, 5.75rem); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.085em; }
+    .clock-status { margin-top: 7px; color: var(--muted); font-size: .86rem; }
+    .timer-actions, .feedback-actions { display: grid; gap: 9px; margin-top: 19px; }
+    .feedback-options .choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(48px, 1fr)); }
+    .rating-hints { display: flex; justify-content: space-between; margin-top: 5px; }
+    .history { list-style: none; padding: 0; margin: 15px 0 0; }
+    .history li { border-top: 1px solid var(--line); padding: 13px 0; }
+    .history-header { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+    .history-header small { flex: none; color: var(--muted); }
+    .history p { color: var(--muted); font-size: .86rem; margin-top: 3px; }
+    .confirmation { color: var(--teal); font-size: .85rem; margin-top: 12px; font-weight: 700; }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden;
+      clip-path: inset(50%); white-space: nowrap;
+    }
+    dialog {
+      max-width: min(calc(100% - 30px), 368px); padding: 21px; color: var(--ink);
+      background: var(--paper); border: 1px solid var(--line); border-radius: 15px;
+    }
+    dialog::backdrop { background: #172a20a8; }
+    dialog p { margin-top: 7px; color: var(--muted); font-size: .9rem; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 17px; flex-wrap: wrap; }
+    @media (max-width: 800px) {
+      .shell { display: flex; justify-content: center; align-items: flex-start; padding: 22px 16px; }
+      .intro { display: none; }
+      .app { max-width: 460px; }
+    }
+    @media (max-width: 500px) {
+      :root { background: var(--paper); }
+      .shell { display: block; padding: 0; }
+      .app { margin: auto; max-width: none; min-height: 100svh; border: 0; border-radius: 0; box-shadow: none; }
+      .notice { border-radius: 0; }
+    }
+    @media (max-width: 370px) {
+      main, .app-header { padding-inline: 15px; }
+      .choices span { padding-inline: 8px; }
+      .suggestion, .panel { padding: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="intro" aria-label="原型简介">
+      <p class="brand"><span class="mark" aria-hidden="true"></span>回血实验室</p>
+      <p class="intro-title">学累了，<br>歇一小会。</p>
+      <p class="intro-copy">给自习间隙留出 1–5 分钟。选一个现在能做的动作，回来记下它有没有帮到你。</p>
+    </aside>
+
+    <div class="app">
+      <div class="notice">交互原型 · 全部为演示数据 · 刷新重置</div>
+      <header class="app-header brand"><span class="mark" aria-hidden="true"></span>回血实验室</header>
+      <main>
+        <section id="now" aria-labelledby="now-title">
+          <h1 id="now-title" tabindex="-1">想怎么歇一会？</h1>
+          <p class="lead">选出你现在有的时间，找一个能马上做的休息。</p>
+
+          <form class="filters" id="filters" autocomplete="off">
+            <fieldset>
+              <legend>现在的感受</legend>
+              <div class="choices">
+                <label><input type="radio" name="feeling" value="any" checked><span>先不选</span></label>
+                <label><input type="radio" name="feeling" value="brain"><span>脑子累</span></label>
+                <label><input type="radio" name="feeling" value="eyes"><span>眼睛累</span></label>
+                <label><input type="radio" name="feeling" value="seated"><span>坐久了</span></label>
+                <label><input type="radio" name="feeling" value="tense"><span>有点烦</span></label>
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>有多少时间</legend>
+              <div class="choices">
+                <label><input type="radio" name="budget" value="1"><span>1 分钟</span></label>
+                <label><input type="radio" name="budget" value="3"><span>3 分钟</span></label>
+                <label><input type="radio" name="budget" value="5"><span>5 分钟</span></label>
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>我在哪儿</legend>
+              <div class="choices">
+                <label><input type="radio" name="place" value="library" checked><span>图书馆</span></label>
+                <label><input type="radio" name="place" value="dorm"><span>宿舍</span></label>
+                <label><input type="radio" name="place" value="outside"><span>户外</span></label>
+              </div>
+            </fieldset>
+          </form>
+
+          <div class="suggestion">
+            <p class="meta" id="action-meta"></p>
+            <h2 id="action-title"></h2>
+            <p class="step" id="action-step"></p>
+            <p class="reason" id="action-reason"></p>
+            <div class="suggestion-actions" id="candidate-actions">
+              <button class="button primary grow" id="start" type="button">开始休息</button>
+              <button class="button quiet" id="switch" type="button">换一个</button>
+            </div>
+            <div class="alternatives" id="alternatives">
+              <button class="button quiet" id="toggle-alternatives" type="button" aria-expanded="false" aria-controls="alternative-list">看备选</button>
+              <div class="alternative-list" id="alternative-list" hidden></div>
+            </div>
+            <div class="suggestion-actions" id="empty-actions" hidden>
+              <button class="button quiet" id="change-conditions" type="button">改一下条件</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="timer" aria-labelledby="timer-title" hidden>
+          <h1 id="timer-title" tabindex="-1"></h1>
+          <p class="lead" id="timer-step"></p>
+          <div class="panel clock-area">
+            <p class="clock" id="clock" role="timer" aria-label="剩余时间"></p>
+            <p class="clock-status" id="clock-status" role="status"></p>
+          </div>
+          <div class="timer-actions">
+            <button class="button primary wide" id="pause" type="button">暂停</button>
+            <button class="button wide" id="end-early" type="button">提前结束</button>
+            <button class="button quiet wide" id="exit" type="button">取消这次休息</button>
+          </div>
+        </section>
+
+        <section id="feedback" aria-labelledby="feedback-title" hidden>
+          <h1 id="feedback-title" tabindex="-1">这次歇得有用吗？</h1>
+          <p class="lead" id="feedback-summary"></p>
+          <div class="panel">
+            <fieldset class="feedback-options" id="ratings">
+              <legend>按自己的感受打个分</legend>
+              <div class="choices">
+                <label><input type="radio" name="rating" value="1" aria-label="1 分，没帮助"><span>1</span></label>
+                <label><input type="radio" name="rating" value="2" aria-label="2 分"><span>2</span></label>
+                <label><input type="radio" name="rating" value="3" aria-label="3 分"><span>3</span></label>
+                <label><input type="radio" name="rating" value="4" aria-label="4 分"><span>4</span></label>
+                <label><input type="radio" name="rating" value="5" aria-label="5 分，很有帮助"><span>5</span></label>
+              </div>
+              <div class="rating-hints muted" aria-hidden="true"><span>没帮助</span><span>很有帮助</span></div>
+            </fieldset>
+          </div>
+          <p class="confirmation" id="feedback-message" role="status" hidden></p>
+          <div class="feedback-actions">
+            <button class="button primary wide" id="save-rating" type="button">保存反馈</button>
+            <button class="button quiet wide" id="skip-rating" type="button">跳过评分</button>
+          </div>
+        </section>
+
+        <section id="records" aria-labelledby="records-title" hidden>
+          <h1 id="records-title" tabindex="-1">休息记录</h1>
+          <p class="lead">这里只显示你在本次原型里进行的休息。</p>
+          <p class="confirmation" id="saved-message" role="status" hidden></p>
+          <div class="panel" id="records-empty">
+            <h2>还没有记录</h2>
+            <p class="muted">做过一次休息后，回来就能看到。</p>
+            <button class="button primary" id="choose-break" type="button">去选一次休息</button>
+          </div>
+          <ul class="history" id="history" hidden></ul>
+        </section>
+
+        <section id="mine" aria-labelledby="mine-title" hidden>
+          <h1 id="mine-title" tabindex="-1">我的</h1>
+          <div class="panel">
+            <h2>可选能力</h2>
+            <p class="muted">Android 版规划把手环、睡眠数据和提醒放在可选设置。选休息、计时和反馈都可以单独使用。这个原型只有说明。</p>
+          </div>
+          <div class="panel">
+            <h2>演示记录</h2>
+            <p class="muted">记录只留在当前页面，刷新会重置。</p>
+            <button class="button quiet" id="clear" type="button">清空演示记录</button>
+            <p class="confirmation" id="clear-message" role="status" hidden></p>
+          </div>
+        </section>
+      </main>
+
+      <nav class="tabs" id="tabs" aria-label="主导航">
+        <button type="button" data-page="now" aria-current="page">现在</button>
+        <button type="button" data-page="records">记录</button>
+        <button type="button" data-page="mine">我的</button>
+      </nav>
+    </div>
+  </div>
+
+  <dialog id="confirm" aria-labelledby="confirm-title" aria-describedby="confirm-description">
+    <h2 id="confirm-title"></h2>
+    <p id="confirm-description"></p>
+    <form method="dialog" class="dialog-actions">
+      <button class="button" value="cancel" autofocus>取消</button>
+      <button class="button primary" id="confirm-action" value="confirm"></button>
+    </form>
+  </dialog>
+  <div id="announcement" class="sr-only" role="status" aria-atomic="true"></div>
+
+  <script>
+    "use strict";
+
+    const actions = [
+      {
+        title: "把笔放下，看看远处", minutes: 3, feelings: ["brain", "eyes"],
+        places: ["library", "dorm", "outside"],
+        step: "先把笔或手机放下。找一个远处的物体，轻松地看看它。",
+        reason: "给眼前的任务留一个停顿，坐在原处就能做。"
+      },
+      {
+        title: "翻面放下手机", minutes: 1, feelings: ["brain", "eyes", "tense"],
+        places: ["library", "dorm"],
+        step: "把手机屏幕朝下放在桌上。抬头看一眼周围，双手放松。",
+        reason: "不用挪地方，也不用出声。"
+      },
+      {
+        title: "把下一步写到纸上", minutes: 1, feelings: ["brain", "tense"],
+        places: ["library", "dorm"],
+        step: "在纸上写下回来后要做的一件小事，然后把纸推到一旁。",
+        reason: "留下一个回来时看得见的起点，在座位上就能做。"
+      },
+      {
+        title: "把肩膀放下来", minutes: 1, feelings: ["seated", "eyes"],
+        places: ["library", "dorm", "outside"],
+        step: "双手平放，让肩膀自然放松，轻轻转动手腕，幅度以舒服为准。",
+        reason: "不占额外空间，适合不方便离开座位时。"
+      },
+      {
+        title: "沿过道走一小圈", minutes: 3, feelings: ["seated", "brain", "tense"],
+        places: ["library"],
+        step: "把椅子轻轻推好，沿不打扰别人的过道慢走一小圈。",
+        reason: "可以静静起身活动一下，走到近处就能折返。"
+      },
+      {
+        title: "去窗边站一站", minutes: 3, feelings: ["seated", "eyes", "tense"],
+        places: ["dorm"],
+        step: "从座位站起来，走到窗边，看看窗外一个固定的地方。",
+        reason: "可以离开桌面一会儿，回来不用重新找位置。"
+      },
+      {
+        title: "换个地方站一会", minutes: 3, feelings: ["seated", "tense"],
+        places: ["outside"],
+        step: "走到附近安全且不挡路的地方站定，看看身边的树或建筑。",
+        reason: "换一个视线落点，随时可以转身回来。"
+      },
+      {
+        title: "走到看得见的地标再回来", minutes: 5, feelings: ["brain", "seated", "tense"],
+        places: ["outside", "dorm"],
+        step: "选一个近处的安全地标，慢慢走过去，再走回原来的位置。",
+        reason: "路线短、有折返点，容易接着做刚才的事。"
+      }
+    ];
+
+    const places = { library: "图书馆", dorm: "宿舍", outside: "户外" };
+    const outcomes = { completed: "计时完成", early: "提前结束", cancelled: "已取消" };
+    const recordTime = new Intl.DateTimeFormat("zh-CN", {
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+    });
+    const byId = id => document.getElementById(id);
+    const tabs = [...document.querySelectorAll("[data-page]")];
+    const pages = ["now", "timer", "feedback", "records", "mine"];
+    const filters = byId("filters");
+    const rating = () => document.querySelector('input[name="rating"]:checked');
+    const records = [];
+    let candidates = [];
+    let current = 0;
+    let expanded = false;
+    let session = null;
+    let ticker = null;
+    let pendingConfirmation = null;
+    let page = "now";
+
+    function announce(message) {
+      byId("announcement").textContent = message;
+    }
+
+    function status(id, message) {
+      const element = byId(id);
+      element.hidden = !message;
+      element.textContent = message;
+    }
+
+    function showPage(next) {
+      if (page === next) return;
+      page = next;
+      if (next === "records") renderRecords();
+      if (next === "mine") status("clear-message", "");
+      for (const id of pages) byId(id).hidden = id !== next;
+      byId("tabs").hidden = next === "timer" || next === "feedback";
+      for (const button of tabs) {
+        if (button.dataset.page === next) button.setAttribute("aria-current", "page");
+        else button.removeAttribute("aria-current");
+      }
+      byId(next + "-title").focus();
+    }
+
+    function criteria() {
+      const values = new FormData(filters);
+      const selectedTime = values.get("budget");
+      return {
+        feeling: values.get("feeling"),
+        budget: selectedTime === null ? null : Number(selectedTime),
+        place: values.get("place")
+      };
+    }
+
+    function refreshCandidates() {
+      const { feeling, budget, place } = criteria();
+      candidates = budget === null ? [] : actions
+        .filter(action => action.minutes <= budget && action.places.includes(place) &&
+          (feeling === "any" || action.feelings.includes(feeling)))
+        .sort((a, b) => b.minutes - a.minutes);
+      current = 0;
+      expanded = false;
+      renderCandidate(true);
+    }
+
+    function renderCandidate(announceChange = false) {
+      const action = candidates[current];
+      const { budget, place } = criteria();
+      byId("action-meta").textContent = action
+        ? "首选 · " + action.minutes + " 分钟 · " + places[place]
+        : places[place] + (budget === null ? "" : " · " + budget + " 分钟");
+      const emptyTitle = budget === null ? "先选你有多少时间" : "这组条件下暂时没有合适的休息";
+      byId("action-title").textContent = action ? action.title : emptyTitle;
+      const emptyHint = budget === null ? "选 1、3 或 5 分钟后，这里会出现适合的行动。" : "可以调整时间、地点或此刻的感受。";
+      byId("action-step").textContent = action ? "先做这一步：" + action.step : emptyHint;
+      byId("action-reason").textContent = action ? "适合现在：" + action.reason : "";
+      byId("candidate-actions").hidden = !action;
+      byId("empty-actions").hidden = Boolean(action);
+      byId("change-conditions").textContent = budget === null ? "去选时间" : "改一下条件";
+      byId("switch").hidden = candidates.length < 2;
+      byId("alternatives").hidden = candidates.length < 2;
+      const toggle = byId("toggle-alternatives");
+      toggle.setAttribute("aria-expanded", String(expanded));
+      toggle.textContent = expanded ? "收起备选" : "看备选";
+      const list = byId("alternative-list");
+      list.hidden = !expanded;
+      list.replaceChildren();
+      if (expanded) {
+        const otherIndexes = candidates.keys();
+        let added = 0;
+        for (const index of otherIndexes) {
+          if (index === current) continue;
+          const alternative = candidates[index];
+          const option = document.createElement("button");
+          option.type = "button";
+          option.className = "button";
+          option.textContent = alternative.title;
+          const time = document.createElement("small");
+          time.textContent = alternative.minutes + " 分钟";
+          option.append(time);
+          option.addEventListener("click", () => {
+            current = index;
+            expanded = false;
+            renderCandidate(true);
+            byId("start").focus();
+          });
+          list.append(option);
+          if (++added === 2) break;
+        }
+      }
+      if (announceChange) announce(action
+        ? "当前首选：" + action.title + "，" + action.minutes + " 分钟。"
+        : emptyTitle + "。");
+    }
+
+    function remaining() {
+      if (session.paused) return session.remainingMs;
+      return Math.max(0, session.until - Date.now());
+    }
+
+    function updateClock() {
+      if (!session || page !== "timer") return;
+      const left = remaining();
+      const seconds = Math.ceil(left / 1000);
+      byId("clock").textContent = String(Math.floor(seconds / 60)).padStart(2, "0") + ":" +
+        String(seconds % 60).padStart(2, "0");
+      if (left === 0) finish("completed");
+    }
+
+    function stopClock() {
+      window.clearInterval(ticker);
+      ticker = null;
+    }
+
+    function start() {
+      const action = candidates[current];
+      if (!action || session) return;
+      const duration = action.minutes * 60000;
+      session = {
+        action, place: places[criteria().place], duration, remainingMs: duration,
+        until: Date.now() + duration, paused: false, result: null
+      };
+      byId("timer-title").textContent = action.title;
+      byId("timer-step").textContent = action.step;
+      byId("clock-status").textContent = "计时中";
+      byId("pause").textContent = "暂停";
+      showPage("timer");
+      updateClock();
+      ticker = window.setInterval(updateClock, 200);
+    }
+
+    function togglePause() {
+      if (!session || page !== "timer") return;
+      const left = remaining();
+      if (left === 0) { finish("completed"); return; }
+      if (session.paused) session.until = Date.now() + left;
+      else session.remainingMs = left;
+      session.paused = !session.paused;
+      byId("pause").textContent = session.paused ? "继续" : "暂停";
+      byId("clock-status").textContent = session.paused ? "已暂停" : "计时中";
+      updateClock();
+    }
+
+    function finish(requestedOutcome) {
+      if (!session || page !== "timer") return;
+      const left = remaining();
+      const outcome = left === 0 ? "completed" : requestedOutcome;
+      stopClock();
+      if (byId("confirm").open) byId("confirm").close("cancel");
+      session.result = {
+        title: session.action.title, planned: session.action.minutes, place: session.place,
+        seconds: Math.floor((session.duration - left) / 1000), outcome, time: new Date(), rating: null
+      };
+      if (outcome === "cancelled") {
+        records.unshift(session.result);
+        session = null;
+        showPage("records");
+        status("saved-message", "已保存取消记录。");
+        return;
+      }
+      const previousRating = rating();
+      if (previousRating) previousRating.checked = false;
+      status("feedback-message", "");
+      byId("feedback-summary").textContent = session.action.title + " · " + outcomes[outcome];
+      showPage("feedback");
+    }
+
+    function saveFeedback(value) {
+      if (!session || !session.result || page !== "feedback") return;
+      records.unshift({ ...session.result, rating: value });
+      session = null;
+      showPage("records");
+      status("saved-message", value === null ? "休息已记录，已跳过评分。" : "休息和评分已记录。");
+    }
+
+    function renderRecords() {
+      status("saved-message", "");
+      byId("records-empty").hidden = records.length > 0;
+      const history = byId("history");
+      history.hidden = records.length === 0;
+      history.replaceChildren();
+      for (const record of records) {
+        const item = document.createElement("li");
+        const header = document.createElement("div");
+        header.className = "history-header";
+        const title = document.createElement("strong");
+        title.textContent = record.title;
+        const result = document.createElement("small");
+        result.textContent = outcomes[record.outcome];
+        header.append(title, result);
+        const details = document.createElement("p");
+        const elapsed = record.seconds < 60
+          ? record.seconds + " 秒"
+          : Math.floor(record.seconds / 60) + " 分 " + (record.seconds % 60) + " 秒";
+        const time = recordTime.format(record.time);
+        details.textContent = time + " · " + record.place +
+          " · 计时 " + elapsed + " / " + record.planned + " 分钟";
+        const feedback = document.createElement("p");
+        if (record.outcome === "cancelled") feedback.textContent = "未评价";
+        else feedback.textContent = record.rating === null ? "已跳过评分" : "主观反馈 " + record.rating + " / 5";
+        item.append(header, details, feedback);
+        history.append(item);
+      }
+    }
+
+    function confirmAction(title, description, label, callback) {
+      const dialog = byId("confirm");
+      byId("confirm-title").textContent = title;
+      byId("confirm-description").textContent = description;
+      byId("confirm-action").textContent = label;
+      pendingConfirmation = callback;
+      dialog.returnValue = "";
+      dialog.showModal();
+    }
+
+    filters.addEventListener("change", refreshCandidates);
+    filters.addEventListener("submit", event => event.preventDefault());
+    byId("change-conditions").addEventListener("click", () => {
+      const time = filters.querySelector('input[name="budget"]:checked') ??
+        filters.querySelector('input[name="budget"]');
+      time.focus();
+    });
+    byId("toggle-alternatives").addEventListener("click", () => {
+      expanded = !expanded;
+      renderCandidate();
+    });
+    byId("switch").addEventListener("click", () => {
+      current = (current + 1) % candidates.length;
+      renderCandidate(true);
+    });
+    byId("start").addEventListener("click", start);
+    byId("pause").addEventListener("click", togglePause);
+    byId("end-early").addEventListener("click", () => finish("early"));
+    document.addEventListener("visibilitychange", updateClock);
+    byId("exit").addEventListener("click", () => {
+      confirmAction("取消这次休息？", "这次休息会保存为「已取消」，无需评分。", "确认取消", () => finish("cancelled"));
+    });
+    byId("save-rating").addEventListener("click", () => {
+      const selected = rating();
+      if (selected) saveFeedback(Number(selected.value));
+      else {
+        status("feedback-message", "先选一个分数，也可以跳过评分。");
+        byId("ratings").querySelector("input").focus();
+      }
+    });
+    byId("ratings").addEventListener("change", () => status("feedback-message", ""));
+    byId("skip-rating").addEventListener("click", () => saveFeedback(null));
+    byId("choose-break").addEventListener("click", () => showPage("now"));
+    for (const button of tabs) button.addEventListener("click", () => showPage(button.dataset.page));
+    byId("clear").addEventListener("click", () => {
+      if (!records.length) { status("clear-message", "现在没有需要清空的记录。"); return; }
+      confirmAction("清空演示记录？", "本页产生的休息记录和评分都会删除。", "确认清空", () => {
+        records.length = 0;
+        status("clear-message", "演示记录已清空。");
+      });
+    });
+    byId("confirm").addEventListener("close", event => {
+      const callback = pendingConfirmation;
+      pendingConfirmation = null;
+      if (event.target.returnValue === "confirm" && callback) callback();
+    });
+
+    filters.reset();
+    refreshCandidates();
+  </script>
+</body>
+</html>
