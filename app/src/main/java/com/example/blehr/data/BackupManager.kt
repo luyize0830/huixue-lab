@@ -34,6 +34,8 @@ object BackupManager {
             }
             // Clear transient messages so importing an old backup cannot trigger yesterday's reminder.
             if (name == "huixue_nudge") editor.remove("pending_title").remove("pending_body")
+            // A global restore invalidates the local persona editor's previous-save history.
+            if (name == "huixue_persona") editor.remove("undo_preset_v1").remove("undo_custom_v1")
             check(editor.commit()) { "设置保存失败" }
         }
         InitiativeStore.clearPending(ctx)

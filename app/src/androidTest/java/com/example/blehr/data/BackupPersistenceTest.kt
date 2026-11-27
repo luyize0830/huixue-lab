@@ -63,6 +63,21 @@ class BackupPersistenceTest {
         BackupManager.restore(ctx, backup)
         assertEquals("local-test-value", ctx.getSharedPreferences("huixue_llm", 0).getString("api_key", null))
     }
+    @Test fun restoringBusinessBackupInvalidatesUnrelatedPersonaUndo() {
+        PersonaStore.save(ctx, PersonaPreset.CUSTOM_ID, "备份里的设定")
+        val backup = BackupManager.capture(ctx)
+        PersonaStore.save(ctx, PersonaPreset.CUSTOM_ID, "旧设定")
+        PersonaStore.save(ctx, "warm", "当前草稿")
+        assertTrue(PersonaStore.hasUndo(ctx))
+        assertFalse(BackupCodec.encode(backup).contains("undo_custom_v1"))
+        BackupManager.restore(ctx, backup)
+        assertEquals("备份里的设定", PersonaStore.custom(ctx))
+        assertFalse(PersonaStore.hasUndo(ctx))
+        assertTrue(runCatching { PersonaStore.undo(ctx) }.isFailure)
+        BackupManager.undo(ctx)
+        assertEquals("当前草稿", PersonaStore.custom(ctx))
+        assertFalse(PersonaStore.hasUndo(ctx))
+    }
     @Test fun repeatedRestoreDoesNotDuplicateRecordsAndUndoRestoresPreviousData() {
         Store(ctx).save(LabData(listOf(action)))
         val first = BackupManager.capture(ctx)

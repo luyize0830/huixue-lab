@@ -8,6 +8,14 @@ import org.junit.Test
 class HumanizerTest {
 
     @Test
+    fun `身份说明不会被当成客服腔删除`() {
+        assertEquals(listOf("作为 AI，我不会真的去上课"), Humanizer.split("作为 AI，我不会真的去上课。"))
+        assertEquals(listOf("作为一个 AI，我只能看到聊天内容"), Humanizer.split("作为一个 AI，我只能看到聊天内容。"))
+        assertEquals(listOf("总之，我是 AI"), Humanizer.split("总之，我是 AI。"))
+        assertEquals(listOf("首先，我是人工智能"), Humanizer.split("首先，我是人工智能。"))
+    }
+
+    @Test
     fun `按竖线拆成多条`() {
         val out = Humanizer.split("诶……我平时不太刷那些呀||你昨天发的那只猫，我倒是还留着呢")
         assertEquals(2, out.size)

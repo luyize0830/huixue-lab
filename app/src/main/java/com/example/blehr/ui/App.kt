@@ -50,6 +50,7 @@ import com.example.blehr.data.ProfileStore
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -175,10 +176,12 @@ fun HuixueApp(
     var loginEdit by remember { mutableStateOf(false) }
     // 音乐页可能从首页"压力"卡进来，也可能从「我的」进来；返回键回哪儿要看来源
     var musicFromHome by remember { mutableStateOf(false) }
+    var restorePersona by rememberSaveable { mutableStateOf(false) }
     var screen by remember {
-        mutableStateOf<Screen>(if (Repo.session != null) restoredScreen()
+        mutableStateOf<Screen>(if (restorePersona) Screen.Persona else if (Repo.session != null) restoredScreen()
             else if (ProfileRepo.current.signedIn || ProfileStore.seen(ctx)) Screen.Home else Screen.Login)
     }
+    SideEffect { restorePersona = screen == Screen.Persona }
     var leaveSession by remember { mutableStateOf(false) }
     var operationError by remember { mutableStateOf<String?>(null) }
     fun perform(block: () -> Unit) { runCatching(block).onFailure { operationError = it.message ?: "保存失败，请重试" } }
@@ -356,7 +359,7 @@ fun HuixueApp(
                 .statusBarsPadding()
                 .navigationBarsPadding()
         ) {
-            if (Repo.session != null && screen !is Screen.Timer && screen !is Screen.Feedback && screen != Screen.Backup) {
+            if (Repo.session != null && screen !is Screen.Timer && screen !is Screen.Feedback && screen != Screen.Backup && screen != Screen.Persona) {
                 TextButton(onClick = { screen = restoredScreen() }, modifier = Modifier.fillMaxWidth()) {
                     Text("继续：${Repo.session!!.action.title} · 进度已保存")
                 }
@@ -458,9 +461,7 @@ fun HuixueApp(
                     initialPresetId = PersonaStore.presetId(ctx),
                     initialCustom = PersonaStore.custom(ctx),
                     onSave = { id, custom ->
-                        PersonaStore.setPresetId(ctx, id)
-                        PersonaStore.setCustom(ctx, custom)
-                        screen = Screen.Mine
+                        PersonaStore.save(ctx, id, custom)
                     },
                     onReset = { PersonaStore.reset(ctx) },
                     onBack = { screen = Screen.Mine }

@@ -11,6 +11,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.blehr.data.ProfileStore
 import com.example.blehr.data.Repo
@@ -35,6 +44,30 @@ class HomeStateTest {
     }
 
     @After fun cleanup() { names.forEach { base.deleteSharedPreferences(it) } }
+
+    @Test fun personaRouteAndUnsavedDraftSurviveRecreation() {
+        ProfileStore.markSeen(context)
+        Repo.init(context)
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent {
+            val resultOwner = requireNotNull(LocalActivityResultRegistryOwner.current)
+            val backOwner = requireNotNull(LocalOnBackPressedDispatcherOwner.current)
+            CompositionLocalProvider(LocalContext provides context,
+                LocalActivityResultRegistryOwner provides resultOwner,
+                LocalOnBackPressedDispatcherOwner provides backOwner) {
+                HuixueApp(null, "测试输入", null, emptyList(), null, null, false,
+                    {}, {}, {}, {}, {}, {})
+            }
+        }
+        compose.onAllNodesWithText("我的").onLast().performClick()
+        compose.onNodeWithText("她的性格").performScrollTo().performClick()
+        compose.onNodeWithText("我自己写").performScrollTo().performClick()
+        compose.onNodeWithTag("persona-custom").performScrollTo().performTextReplacement("转屏后保留这份草稿")
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithTag("persona-custom").performScrollTo().assertTextEquals("转屏后保留这份草稿")
+        compose.onNodeWithText("← 返回").performScrollTo().performClick()
+        compose.onNodeWithText("放弃未保存的修改？").assertIsDisplayed()
+    }
 
     @Test fun liveHeartRateChangesScoreAndDisconnectRemovesPenalty() {
         ProfileStore.markSeen(context)

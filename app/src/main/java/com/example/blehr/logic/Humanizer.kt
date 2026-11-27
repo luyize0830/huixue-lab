@@ -28,11 +28,12 @@ object Humanizer {
      */
     private val BOT_TELLS = listOf(
         "建议你", "建议您", "你可以考虑", "你可以试试", "希望对你", "希望能帮到你",
-        "作为 AI", "作为一个 AI", "总之", "综上所述", "总结一下", "首先", "其次",
+        "总之", "综上所述", "总结一下", "首先", "其次",
         "如果你愿意", "我很乐意", "有什么我可以帮你", "随时告诉我"
     )
 
     private val SENTENCE_END = charArrayOf('。', '！', '？', '!', '?', '…', '；', ';')
+    private val IDENTITY = Regex("我(?:是|作为|作为一个|只是|属于|这个)?\\s*(?:AI|人工智能|虚构角色|虚构的角色)|作为(?:一个)?\\s*AI", RegexOption.IGNORE_CASE)
 
     /**
      * @return 一到三条消息；返回空列表表示"她这次不说话"。
@@ -70,7 +71,7 @@ object Humanizer {
     /** 删掉客服腔的分句；整段都被删空时返回空串（等于这次不说话）。 */
     fun clean(text: String): String {
         val parts = bySentencesRaw(text)
-        val kept = parts.filterNot { p -> BOT_TELLS.any { p.contains(it) } }
+        val kept = parts.filterNot { p -> !IDENTITY.containsMatchIn(p) && BOT_TELLS.any { p.contains(it) } }
         return kept.joinToString("").trim()
     }
 
